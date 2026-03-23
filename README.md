@@ -60,6 +60,8 @@ When enabled, the app persists:
 ## API endpoints
 
 - `POST /payments`
+- `POST /payments/payment`
+- `POST /authorise`
 - `GET /payments/:id`
 - `POST /payments/:id/capture`
 - `POST /payments/:id/refund`

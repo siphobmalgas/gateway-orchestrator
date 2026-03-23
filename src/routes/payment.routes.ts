@@ -9,7 +9,7 @@ export const paymentRoutes = (controller: PaymentController): Router => {
   router.get('/transactions/:id/logs', asyncHandler(controller.listTransactionLogs));
   router.get('/payments/:id', asyncHandler(controller.getById));
   router.post('/payments/payment', asyncHandler(controller.payment));
-  router.post('/payments/authorize', asyncHandler(controller.authorize));
+  router.post('/authorise', asyncHandler(controller.authorize));
   router.post('/payments', asyncHandler(controller.create));
   router.post('/payments/:id/capture', asyncHandler(controller.capture));
   router.post('/payments/:id/refund', asyncHandler(controller.refund));

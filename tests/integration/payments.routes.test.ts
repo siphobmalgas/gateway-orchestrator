@@ -2,6 +2,27 @@ import request from 'supertest';
 import { app } from '../../src/app';
 
 describe('Payments API', () => {
+  it('supports /authorise endpoint', async () => {
+    const res = await request(app)
+      .post('/authorise')
+      .set('idempotency-key', 'idem-authorise-flow')
+      .send({
+        provider: 'PAYU',
+        amount: 220,
+        currency: 'ZAR',
+        paymentMethod: 'MOBICRED'
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.provider).toBe('PAYU');
+    expect(res.body.status).toBe('PENDING');
+    expect(res.body.checkoutUrl).toContain('PayUReference=');
+    expect(res.body.inlineRedirect).toMatchObject({
+      mode: 'IFRAME',
+      method: 'GET'
+    });
+  });
+
   it('supports explicit payment flow endpoint', async () => {
     const res = await request(app)
       .post('/payments/payment')
