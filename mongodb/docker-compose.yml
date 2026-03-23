@@ -1,0 +1,20 @@
+
+version: "3.9"
+
+services:
+  mongo:
+    image: mongo:7.0
+    container_name: mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: sbrmd2188_db_user
+      MONGO_INITDB_ROOT_PASSWORD: zgDu6AC7iEyUdmwL
+    volumes:
+      - mongo-data:/data/db
+      - ./init:/docker-entrypoint-initdb.d
+    ports:
+      - "27017:27017"
+
+volumes:
+  mongo-data:
+    driver: local

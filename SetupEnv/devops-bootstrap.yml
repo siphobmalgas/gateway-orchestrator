@@ -1,0 +1,120 @@
+---
+- name: DevOps Workstation Bootstrap
+  hosts: local
+  become: yes
+
+  vars:
+    node_version: "20"
+
+  tasks:
+
+  - name: Update apt cache
+    apt:
+      update_cache: yes
+
+#################################
+# Base Packages
+#################################
+
+  - name: Install base packages
+    apt:
+      name:
+        - curl
+        - wget
+        - git
+        - ca-certificates
+        - apt-transport-https
+        - software-properties-common
+        - gnupg
+      state: present
+
+#################################
+# Docker
+#################################
+
+
+  - name: Install Docker
+    apt:
+      name:
+        - docker-ce
+        - docker-ce-cli
+        - containerd.io
+        - docker-compose-plugin
+      state: present
+
+  - name: Add user to docker group
+    user:
+      name: "{{ ansible_user_id }}"
+      groups: docker
+      append: yes
+
+#################################
+# NVM + Node
+#################################
+
+  - name: Install NVM
+    become: no
+    shell: |
+      curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+    args:
+      creates: ~/.nvm
+
+  - name: Install Node using NVM
+    become: no
+    shell: |
+      export NVM_DIR="$HOME/.nvm"
+      [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+      nvm install {{ node_version }}
+      nvm alias default {{ node_version }}
+
+#################################
+# kubectl
+#################################
+
+  - name: Install kubectl
+    shell: |
+      curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+      install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+      rm kubectl
+
+#################################
+# Helm
+#################################
+
+  - name: Install Helm
+    shell: |
+      curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+#################################
+# k9s
+#################################
+
+  - name: Install k9s
+    shell: |
+      curl -sS https://webinstall.dev/k9s | bash
+
+#################################
+# VS Code
+#################################
+
+  - name: Add Microsoft GPG key
+    shell: |
+      wget -qO- https://packages.microsoft.com/keys/microsoft.asc \
+      | gpg --dearmor > packages.microsoft.gpg
+      install -D -o root -g root -m 644 packages.microsoft.gpg \
+      /etc/apt/keyrings/packages.microsoft.gpg
+
+  - name: Add VS Code repository
+    shell: |
+      echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/packages.microsoft.gpg] \
+      https://packages.microsoft.com/repos/code stable main" \
+      | tee /etc/apt/sources.list.d/vscode.list
+
+  - name: Update apt cache after VS Code repo
+    apt:
+      update_cache: yes
+
+  - name: Install VS Code
+    apt:
+      name: code
+      state: present

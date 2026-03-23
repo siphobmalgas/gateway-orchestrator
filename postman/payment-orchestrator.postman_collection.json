@@ -1,0 +1,302 @@
+{
+  "info": {
+    "_postman_id": "b4f5229f-2c66-4b20-98f6-d7a3ec77f601",
+    "name": "Payment Orchestrator API",
+    "description": "Collection for Payment, Authorize, Capture, Refund, Health, Metrics, and PayU IPN/Webhook flows.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.collectionVariables.get('idempotencyKey')) {",
+          "  pm.collectionVariables.set('idempotencyKey', 'idem-' + Date.now());",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "idempotencyKey", "value": "idem-{{timestamp}}" },
+    { "key": "paymentId", "value": "" },
+    { "key": "providerReference", "value": "" },
+    { "key": "responseHash", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('health is ok', function () { pm.expect(json.status).to.eql('ok'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/metrics",
+              "host": ["{{baseUrl}}"],
+              "path": ["metrics"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "POST /payments/payment (PAYU)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "idem-payment-{{$timestamp}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 220,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"MOBICRED\",\n  \"transactionType\": \"PAYMENT\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "payment"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('checkoutUrl exists', function () { pm.expect(json.checkoutUrl).to.include('PayUReference='); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /payments/authorize (PAYU)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "idem-authorize-{{$timestamp}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 120,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"CARD\",\n  \"transactionType\": \"RESERVE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/authorize",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "authorize"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /payments/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/{{paymentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "{{paymentId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /payments/:id/capture",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/{{paymentId}}/capture",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "{{paymentId}}", "capture"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /payments/:id/refund",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 50,\n  \"currency\": \"ZAR\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/{{paymentId}}/refund",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "{{paymentId}}", "refund"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "POST /webhooks/payu (IPN XML no signature)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "text/xml" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<PaymentNotification>\n  <MerchantReference>{{paymentId}}</MerchantReference>\n  <TransactionType>PAYMENT</TransactionType>\n  <TransactionState>SUCCESSFUL</TransactionState>\n  <ResultCode>00</ResultCode>\n  <ResultMessage>Successful</ResultMessage>\n  <PayUReference>{{providerReference}}</PayUReference>\n  <IpnExtraInfo>\n    <ResponseHash>ipn-{{$guid}}</ResponseHash>\n  </IpnExtraInfo>\n</PaymentNotification>"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/payu",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhooks", "payu"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('accepted true', function () { pm.expect(json.accepted).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /webhooks/payu (invalid signature)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "text/plain" },
+              { "key": "x-signature", "value": "invalid" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"event\":\"payment.updated\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/payu",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhooks", "payu"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
