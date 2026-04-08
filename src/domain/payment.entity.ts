@@ -14,14 +14,16 @@ export interface Payment {
 }
 
 const stateTransitions: Record<PaymentStatus, PaymentStatus[]> = {
-  [PaymentStatus.CREATED]: [PaymentStatus.AUTHORIZED, PaymentStatus.PENDING, PaymentStatus.FAILED, PaymentStatus.DECLINED],
-  [PaymentStatus.PENDING]: [PaymentStatus.AUTHORIZED, PaymentStatus.CAPTURED, PaymentStatus.FAILED, PaymentStatus.DECLINED, PaymentStatus.RESERVE_CANCEL, PaymentStatus.PAYMENT],
-  [PaymentStatus.AUTHORIZED]: [PaymentStatus.CAPTURED, PaymentStatus.REFUNDED, PaymentStatus.FAILED, PaymentStatus.RESERVE_CANCEL, PaymentStatus.PAYMENT],
+  [PaymentStatus.CREATED]: [PaymentStatus.AUTHORIZED, PaymentStatus.PENDING, PaymentStatus.PENDING_3DS, PaymentStatus.FAILED, PaymentStatus.DECLINED],
+  [PaymentStatus.PENDING]: [PaymentStatus.AUTHORIZED, PaymentStatus.CAPTURED, PaymentStatus.PENDING_3DS, PaymentStatus.FAILED, PaymentStatus.DECLINED, PaymentStatus.VOIDED, PaymentStatus.PAYMENT],
+  [PaymentStatus.PENDING_3DS]: [PaymentStatus.AUTHORIZED, PaymentStatus.CAPTURED, PaymentStatus.FAILED, PaymentStatus.DECLINED, PaymentStatus.VOIDED, PaymentStatus.PAYMENT],
+  [PaymentStatus.AUTHORIZED]: [PaymentStatus.CAPTURED, PaymentStatus.REFUNDED, PaymentStatus.FAILED, PaymentStatus.VOIDED, PaymentStatus.PAYMENT],
   [PaymentStatus.CAPTURED]: [PaymentStatus.REFUNDED, PaymentStatus.PAYMENT],
   [PaymentStatus.REFUNDED]: [],
   [PaymentStatus.FAILED]: [],
   [PaymentStatus.DECLINED]: [],
-  [PaymentStatus.RESERVE_CANCEL]: [],
+  [PaymentStatus.UNKNOWN]: [PaymentStatus.PENDING, PaymentStatus.PENDING_3DS, PaymentStatus.AUTHORIZED, PaymentStatus.CAPTURED, PaymentStatus.FAILED, PaymentStatus.DECLINED, PaymentStatus.REFUNDED, PaymentStatus.VOIDED, PaymentStatus.PAYMENT],
+  [PaymentStatus.VOIDED]: [],
   [PaymentStatus.PAYMENT]: []
 };
 

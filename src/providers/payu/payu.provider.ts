@@ -118,7 +118,7 @@ export class PayUProvider extends BaseProvider {
         }
       });
 
-      if (result.status === PaymentStatus.PENDING && secure3DUrl) {
+      if ((result.status === PaymentStatus.PENDING || result.status === PaymentStatus.PENDING_3DS) && secure3DUrl) {
         response.redirectUrl = secure3DUrl;
       }
 

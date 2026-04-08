@@ -16,35 +16,37 @@ import { escapeXml, readTag } from './payu.xml';
  *   EXPIRED          – transaction created but never attempted
  *   AWAITING_PAYMENT – EFT pending confirmation (not yet SUCCESSFUL or FAILED)
  */
-const mapTransactionState = (transactionState: string, transactionType: string): PaymentStatus => {
-  const state = transactionState.toUpperCase();
-  const type = transactionType.toUpperCase();
+export const mapTransactionState = (transactionState: string, transactionType: string): PaymentStatus => {
+  const state = transactionState.trim().toUpperCase();
+  const type = transactionType.trim().toUpperCase();
 
   switch (state) {
-    case 'SUCCESSFUL': {
-      switch (type) {
-        case 'RESERVE':
-          return PaymentStatus.AUTHORIZED;
-        case 'FINALIZE':
-        case 'PAYMENT':
-          return PaymentStatus.CAPTURED;
-        case 'CREDIT':
-          return PaymentStatus.REFUNDED;
-        case 'RESERVE_CANCEL':
-          return PaymentStatus.RESERVE_CANCEL;
-        default:
-          return PaymentStatus.CAPTURED;
+    case 'SUCCESSFUL':
+      if (type === 'RESERVE') {
+        return PaymentStatus.AUTHORIZED;
       }
-    }
+      if (type === 'FINALIZE' || type === 'PAYMENT') {
+        return PaymentStatus.CAPTURED;
+      }
+      if (type === 'CREDIT') {
+        return PaymentStatus.REFUNDED;
+      }
+      if (type === 'RESERVE_CANCEL') {
+        return PaymentStatus.VOIDED;
+      }
+      return PaymentStatus.CAPTURED;
     case 'NEW':
     case 'PROCESSING':
     case 'AWAITING_PAYMENT':
       return PaymentStatus.PENDING;
+    case '3DS_PENDING':
+      return PaymentStatus.PENDING_3DS;
     case 'FAILED':
     case 'TIMEOUT':
     case 'EXPIRED':
-    default:
       return PaymentStatus.FAILED;
+    default:
+      return PaymentStatus.UNKNOWN;
   }
 };
 
@@ -69,10 +71,6 @@ export const getTransaction = async (input: GetTransactionInput): Promise<Lookup
     };
   }
 
-  const merchantRefXml = input.merchantReference
-    ? `\n        <merchantReference>${escapeXml(input.merchantReference)}</merchantReference>`
-    : '';
-
   const payload = `<?xml version="1.0" encoding="UTF-8"?>
 <SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns1="http://soap.api.controller.web.payjar.com/" xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">
   <SOAP-ENV:Header>
@@ -88,7 +86,7 @@ export const getTransaction = async (input: GetTransactionInput): Promise<Lookup
       <Api>ONE_ZERO</Api>
       <Safekey>${escapeXml(env.payu.safekey)}</Safekey>
       <AdditionalInformation>
-        <payUReference>${escapeXml(input.payuReference)}</payUReference>${merchantRefXml}
+        <payUReference>${escapeXml(input.payuReference)}</payUReference>
       </AdditionalInformation>
     </ns1:getTransaction>
   </SOAP-ENV:Body>
@@ -107,10 +105,12 @@ export const getTransaction = async (input: GetTransactionInput): Promise<Lookup
 
   const transactionState = readTag(soapResponse, 'transactionState') ?? 'FAILED';
   const transactionType = readTag(soapResponse, 'transactionType') ?? '';
-  const payuReference = readTag(soapResponse, 'payUReference') ?? input.payuReference;
+  const currentPayuReference = readTag(soapResponse, 'currentPayUReference') ?? '';
+  const payuReference = currentPayuReference || readTag(soapResponse, 'payUReference') || input.payuReference;
   const merchantReference = readTag(soapResponse, 'merchantReference') ?? input.merchantReference ?? input.payuReference;
   const resultCode = readTag(soapResponse, 'resultCode') ?? '';
   const resultMessage = readTag(soapResponse, 'resultMessage') ?? '';
+  const requestTrace = readTag(soapResponse, 'requestTrace') ?? '';
   const amountInCents = parseInt(readTag(soapResponse, 'amountInCents') ?? '0', 10);
   const currency = readTag(soapResponse, 'currencyCode') ?? 'ZAR';
 
@@ -124,6 +124,11 @@ export const getTransaction = async (input: GetTransactionInput): Promise<Lookup
     currency,
     resultCode,
     resultMessage,
-    rawResponse: { soapResponse, endpoint: `${input.baseUrl}/getTransaction` }
+    rawResponse: {
+      soapResponse,
+      endpoint: `${input.baseUrl}/getTransaction`,
+      requestTrace,
+      currentPayUReference: currentPayuReference || undefined
+    }
   };
 };

@@ -29,6 +29,20 @@ describe('Webhook API', () => {
     expect(res.status).toBe(400);
   });
 
+  it('accepts valid signed payflex webhook', async () => {
+    const payload = JSON.stringify({ event: 'payment.updated' });
+    const signature = createHmac('sha256', 'payflex_dev_secret').update(payload).digest('hex');
+
+    const res = await request(app)
+      .post('/webhooks/payflex')
+      .set('x-signature', signature)
+      .set('content-type', 'text/plain')
+      .send(payload);
+
+    expect(res.status).toBe(200);
+    expect(res.body.accepted).toBe(true);
+  });
+
   it('accepts payu xml ipn without x-signature when response hash exists', async () => {
     const payload = `<?xml version="1.0" encoding="UTF-8"?>
 <PaymentNotification>

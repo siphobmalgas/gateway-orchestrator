@@ -2,6 +2,7 @@ import { env } from '../../config/env';
 import { PaymentStatus } from '../../domain/enums';
 import { requestWithRetry } from '../../infrastructure/http.client';
 import { logger } from '../../infrastructure/logger';
+import { mapTransactionState } from './payu.get-transaction';
 import { escapeXml, readTag } from './payu.xml';
 
 interface DoTransactionInput {
@@ -99,12 +100,40 @@ const normalizeCardExpiry = (value: string | undefined): string | undefined => {
   return value.trim();
 };
 
+const resolveDoTransactionStatus = (
+  responseTransactionState: string | undefined,
+  responseTransactionType: string,
+  successful: boolean,
+  resultCode: string,
+  fallbackStatus: PaymentStatus,
+  is3DSPending: boolean
+): PaymentStatus => {
+  if (is3DSPending) {
+    return PaymentStatus.PENDING_3DS;
+  }
+
+  const normalizedResultCode = resultCode.trim().toUpperCase();
+  const transactionState = responseTransactionState?.trim();
+
+  if (transactionState && transactionState.length > 0) {
+    if (!successful && normalizedResultCode !== '00') {
+      return PaymentStatus.FAILED;
+    }
+
+    return mapTransactionState(transactionState, responseTransactionType);
+  }
+
+  if (successful && normalizedResultCode === '00') {
+    return fallbackStatus;
+  }
+
+  return PaymentStatus.FAILED;
+};
+
 const executeDoTransaction = async (
   input: DoTransactionInput,
   transactionType: 'FINALIZE' | 'RESERVE' | 'CREDIT' | 'RESERVE_CANCEL',
-  simulatedStatus: PaymentStatus,
-  successStatus: PaymentStatus,
-  failureStatus: PaymentStatus
+  simulatedStatus: PaymentStatus
 ): Promise<DoTransactionResult> => {
   const hasSoapCredentials = Boolean(env.payu.soapUsername && env.payu.soapPassword && env.payu.safekey);
   const shouldCallSoap = hasSoapCredentials && env.nodeEnv !== 'test';
@@ -209,7 +238,11 @@ const executeDoTransaction = async (
   const pointOfFailure = readTag(soapResponse, 'pointOfFailure') ?? '';
   const faultCode = readTag(soapResponse, 'faultcode') ?? '';
   const faultString = readTag(soapResponse, 'faultstring') ?? '';
-  const providerReference = readTag(soapResponse, 'payUReference') ?? input.transactionId;
+  const currentProviderReference = readTag(soapResponse, 'currentPayUReference') ?? '';
+  const requestTrace = readTag(soapResponse, 'requestTrace') ?? '';
+  const responseTransactionState = readTag(soapResponse, 'transactionState') ?? readTag(soapResponse, 'TransactionState') ?? '';
+  const responseTransactionType = readTag(soapResponse, 'transactionType') ?? readTag(soapResponse, 'TransactionType') ?? transactionType;
+  const providerReference = currentProviderReference || readTag(soapResponse, 'payUReference') || input.transactionId;
   const merchantReference = readTag(soapResponse, 'merchantReference') ?? input.merchantReference;
   const paymentMethodBlock = extractBlock(soapResponse, 'paymentMethodsUsed');
   const gatewayReference = readTag(paymentMethodBlock ?? '', 'gatewayReference') ?? '';
@@ -227,8 +260,12 @@ const executeDoTransaction = async (
 
   logger.info('PayU doTransaction SOAP response', {
     transactionType,
+    responseTransactionType,
+    responseTransactionState,
     merchantReference: input.merchantReference,
     payuReference: providerReference,
+    currentPayuReference: currentProviderReference,
+    requestTrace,
     successful,
     resultCode,
     resultMessage,
@@ -240,18 +277,30 @@ const executeDoTransaction = async (
 
   return {
     providerReference,
-    status: is3DSPending ? PaymentStatus.PENDING : successful && resultCode === '00' ? successStatus : failureStatus,
+    status: resolveDoTransactionStatus(
+      responseTransactionState,
+      responseTransactionType,
+      successful,
+      resultCode,
+      simulatedStatus,
+      is3DSPending
+    ),
     rawResponse: {
       endpoint: `${input.baseUrl}/doTransaction`,
       transactionType,
+      transactionState: responseTransactionState,
+      resolvedTransactionType: responseTransactionType,
       result: {
         successful,
         resultCode,
         resultMessage,
         displayMessage,
         pointOfFailure,
+        requestTrace,
         merchantReference,
-        payuReference: providerReference
+        payuReference: readTag(soapResponse, 'payUReference') ?? input.transactionId,
+        currentPayuReference: currentProviderReference || undefined,
+        effectivePayuReference: providerReference
       },
       paymentMethodUsed: {
         type: paymentMethodType,
@@ -279,13 +328,13 @@ const executeDoTransaction = async (
 };
 
 export const runFinalizeDoTransaction = async (input: DoTransactionInput): Promise<DoTransactionResult> =>
-  executeDoTransaction(input, 'FINALIZE', PaymentStatus.CAPTURED, PaymentStatus.CAPTURED, PaymentStatus.FAILED);
+  executeDoTransaction(input, 'FINALIZE', PaymentStatus.CAPTURED);
 
 export const runReserveDoTransaction = async (input: DoTransactionInput): Promise<DoTransactionResult> =>
-  executeDoTransaction(input, 'RESERVE', PaymentStatus.AUTHORIZED, PaymentStatus.AUTHORIZED, PaymentStatus.FAILED);
+  executeDoTransaction(input, 'RESERVE', PaymentStatus.AUTHORIZED);
 
 export const runCreditDoTransaction = async (input: DoTransactionInput): Promise<DoTransactionResult> =>
-  executeDoTransaction(input, 'CREDIT', PaymentStatus.REFUNDED, PaymentStatus.REFUNDED, PaymentStatus.FAILED);
+  executeDoTransaction(input, 'CREDIT', PaymentStatus.REFUNDED);
 
 export const runReserveCancelDoTransaction = async (input: DoTransactionInput): Promise<DoTransactionResult> =>
-  executeDoTransaction(input, 'RESERVE_CANCEL', PaymentStatus.RESERVE_CANCEL, PaymentStatus.RESERVE_CANCEL, PaymentStatus.FAILED);
+  executeDoTransaction(input, 'RESERVE_CANCEL', PaymentStatus.VOIDED);

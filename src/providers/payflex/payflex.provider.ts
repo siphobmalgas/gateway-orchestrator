@@ -4,15 +4,15 @@ import { PaymentProviderName, PaymentStatus } from '../../domain/enums';
 import { AuthorizeRequest, CaptureRequest, PaymentRequest, PaymentResponse, RefundRequest, VoidRequest } from '../../domain/provider.interface';
 import { BaseProvider } from '../shared/base.provider';
 
-export class PeachProvider extends BaseProvider {
+export class PayFlexProvider extends BaseProvider {
   constructor() {
-    super(PaymentProviderName.PEACH, env.peach.baseUrl, env.peach.apiKey, env.peach.webhookSecret);
+    super(PaymentProviderName.PAYFLEX, env.payflex.baseUrl, env.payflex.apiKey, env.payflex.webhookSecret);
   }
 
   async payment(request: PaymentRequest): Promise<PaymentResponse> {
     const startedAt = Date.now();
     const response = this.normalizeResponse({
-      providerReference: `peach_${randomUUID()}`,
+      providerReference: `payflex_${randomUUID()}`,
       amount: request.amount,
       currency: request.currency,
       status: PaymentStatus.CAPTURED,
@@ -25,7 +25,7 @@ export class PeachProvider extends BaseProvider {
   async authorize(request: AuthorizeRequest): Promise<PaymentResponse> {
     const startedAt = Date.now();
     const response = this.normalizeResponse({
-      providerReference: `peach_${randomUUID()}`,
+      providerReference: `payflex_${randomUUID()}`,
       amount: request.amount,
       currency: request.currency,
       status: PaymentStatus.AUTHORIZED,

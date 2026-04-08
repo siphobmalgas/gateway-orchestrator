@@ -4,7 +4,7 @@ Multi-PSP payment orchestration platform built with Node.js, TypeScript, and Exp
 
 ## Features
 
-- Provider adapter abstraction (`PayU`, `PayFast`, `Stitch`, `Peach`)
+- Provider adapter abstraction (`PayU`, `PayFast`, `PayFlex`, `Stitch`, `Peach`)
 - Normalized payment domain model
 - Idempotency key handling
 - Transaction state machine validation
@@ -68,6 +68,7 @@ When enabled, the app persists:
 - `POST /payments/:id/void`
 - `POST /webhooks/payu`
 - `POST /webhooks/payfast`
+- `POST /webhooks/payflex`
 - `POST /webhooks/stitch`
 - `POST /webhooks/peach`
 - `GET /health`

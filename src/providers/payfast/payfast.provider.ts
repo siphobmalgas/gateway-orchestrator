@@ -67,7 +67,7 @@ export class PayFastProvider extends BaseProvider {
       providerReference: request.transactionId,
       amount: request.amount,
       currency: request.currency,
-      status: PaymentStatus.RESERVE_CANCEL,
+      status: PaymentStatus.VOIDED,
       rawResponse: { simulated: true, endpoint: `${this.baseUrl}/void` }
     });
     this.observeLatency('void', startedAt);

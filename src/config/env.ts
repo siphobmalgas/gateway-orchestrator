@@ -65,6 +65,11 @@ export const env = {
     apiKey: process.env.PAYFAST_API_KEY ?? '',
     webhookSecret: requireEnv(process.env.PAYFAST_WEBHOOK_SECRET ?? 'payfast_dev_secret', 'PAYFAST_WEBHOOK_SECRET')
   },
+  payflex: {
+    baseUrl: process.env.PAYFLEX_BASE_URL ?? 'https://sandbox.payflex.example',
+    apiKey: process.env.PAYFLEX_API_KEY ?? '',
+    webhookSecret: requireEnv(process.env.PAYFLEX_WEBHOOK_SECRET ?? 'payflex_dev_secret', 'PAYFLEX_WEBHOOK_SECRET')
+  },
   stitch: {
     baseUrl: process.env.STITCH_BASE_URL ?? 'https://sandbox.stitch.money',
     apiKey: process.env.STITCH_API_KEY ?? '',

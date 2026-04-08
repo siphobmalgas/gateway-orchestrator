@@ -1,12 +1,20 @@
 import { randomUUID } from 'crypto';
 import { PayURedirectPaymentMethod, PayUSetTransactionType, PaymentProviderName, PaymentStatus } from '../domain/enums';
 import { ensureTransition, Payment } from '../domain/payment.entity';
-import { LookupTransactionResult, PaymentProvider, RedirectContext } from '../domain/provider.interface';
+import { LookupTransactionResult, PaymentProvider, PaymentResponse, RedirectContext } from '../domain/provider.interface';
+import { ProviderOperationError } from '../errors/provider-operation.error';
 import { logger } from '../infrastructure/logger';
 import { paymentAttemptCounter } from '../infrastructure/metrics';
 import { PaymentLog } from '../infrastructure/repositories/payment-log.repository';
 import { PaymentLogRepository } from '../infrastructure/repositories/payment-log.repository';
 import { PaymentRepository } from '../infrastructure/repositories/payment.repository';
+
+type ProviderFailureMetadata = {
+  resultCode?: string;
+  resultMessage?: string;
+  displayMessage?: string;
+  pointOfFailure?: string;
+};
 
 export interface CreatePaymentInput {
   provider: PaymentProviderName;
@@ -130,7 +138,7 @@ export class PaymentService {
       merchantReference: payment.id
     });
 
-    this.applyOperationResult(payment, response.status, response.providerReference, 'capture');
+    const failure = this.applyOperationResult(payment, response, 'capture');
     payment.updatedAt = new Date();
     await this.paymentRepository.update(payment);
 
@@ -144,6 +152,10 @@ export class PaymentService {
       responseTimeMs: Date.now() - startedAt,
       createdAt: new Date()
     });
+
+    if (failure) {
+      throw failure;
+    }
 
     return payment;
   }
@@ -163,7 +175,7 @@ export class PaymentService {
       merchantReference: payment.id
     });
 
-    this.applyOperationResult(payment, response.status, response.providerReference, 'refund');
+    const failure = this.applyOperationResult(payment, response, 'refund');
     payment.updatedAt = new Date();
     await this.paymentRepository.update(payment);
 
@@ -177,6 +189,10 @@ export class PaymentService {
       responseTimeMs: Date.now() - startedAt,
       createdAt: new Date()
     });
+
+    if (failure) {
+      throw failure;
+    }
 
     return payment;
   }
@@ -196,7 +212,7 @@ export class PaymentService {
       merchantReference: payment.id
     });
 
-    this.applyOperationResult(payment, response.status, response.providerReference, 'void');
+    const failure = this.applyOperationResult(payment, response, 'void');
     payment.updatedAt = new Date();
     await this.paymentRepository.update(payment);
 
@@ -210,6 +226,10 @@ export class PaymentService {
       responseTimeMs: Date.now() - startedAt,
       createdAt: new Date()
     });
+
+    if (failure) {
+      throw failure;
+    }
 
     return payment;
   }
@@ -317,25 +337,61 @@ export class PaymentService {
 
   private applyOperationResult(
     payment: Payment,
-    responseStatus: PaymentStatus,
-    providerReference: string | undefined,
+    response: PaymentResponse,
     operation: 'capture' | 'refund' | 'void'
-  ): void {
-    if (providerReference) {
-      payment.providerReference = providerReference;
+  ): ProviderOperationError | undefined {
+    if (response.providerReference) {
+      payment.providerReference = response.providerReference;
     }
 
-    if (responseStatus === PaymentStatus.FAILED) {
+    if (response.status === PaymentStatus.FAILED) {
+      const failure = this.extractProviderFailureMetadata(response.rawResponse);
       logger.warn('Provider operation failed; preserving current payment status', {
         paymentId: payment.id,
         operation,
         currentStatus: payment.status,
-        providerReference: payment.providerReference
+        providerReference: payment.providerReference,
+        ...failure
       });
-      return;
+
+      const reason = failure.resultMessage || failure.displayMessage || 'Provider operation failed';
+      const message = `${payment.provider} ${operation} failed: ${reason}${failure.resultCode ? ` (resultCode=${failure.resultCode})` : ''}`;
+
+      return new ProviderOperationError(message, {
+        code: failure.resultCode,
+        details: {
+          provider: payment.provider,
+          operation,
+          providerReference: payment.providerReference,
+          currentStatus: payment.status,
+          resultMessage: failure.resultMessage,
+          displayMessage: failure.displayMessage,
+          pointOfFailure: failure.pointOfFailure
+        }
+      });
     }
 
-    ensureTransition(payment.status, responseStatus);
-    payment.status = responseStatus;
+    ensureTransition(payment.status, response.status);
+    payment.status = response.status;
+    return undefined;
+  }
+
+  private extractProviderFailureMetadata(rawResponse: unknown): ProviderFailureMetadata {
+    if (!rawResponse || typeof rawResponse !== 'object') {
+      return {};
+    }
+
+    const result = 'result' in rawResponse ? (rawResponse as { result?: unknown }).result : undefined;
+    if (!result || typeof result !== 'object') {
+      return {};
+    }
+
+    const details = result as Record<string, unknown>;
+    return {
+      resultCode: typeof details.resultCode === 'string' ? details.resultCode : undefined,
+      resultMessage: typeof details.resultMessage === 'string' ? details.resultMessage : undefined,
+      displayMessage: typeof details.displayMessage === 'string' ? details.displayMessage : undefined,
+      pointOfFailure: typeof details.pointOfFailure === 'string' ? details.pointOfFailure : undefined
+    };
   }
 }

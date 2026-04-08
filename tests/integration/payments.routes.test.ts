@@ -177,6 +177,22 @@ describe('Payments API', () => {
     expect(first.body.id).toBe(second.body.id);
   });
 
+  it('supports PAYFLEX as a standalone provider', async () => {
+    const res = await request(app)
+      .post('/payments')
+      .set('idempotency-key', 'idem-payflex-provider')
+      .send({
+        provider: 'PAYFLEX',
+        amount: 199,
+        currency: 'ZAR'
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.provider).toBe('PAYFLEX');
+    expect(res.body.status).toBe('AUTHORIZED');
+    expect(res.body.providerReference).toContain('payflex_');
+  });
+
   it('updates payment status to captured after successful payu ipn', async () => {
     const created = await request(app)
       .post('/payments')
