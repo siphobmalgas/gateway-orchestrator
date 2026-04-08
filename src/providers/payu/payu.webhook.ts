@@ -28,6 +28,10 @@ const mapIpnStatus = (
       return PaymentStatus.CAPTURED;
     }
 
+    if (type === 'RESERVE_CANCEL') {
+      return PaymentStatus.VOIDED;
+    }
+
     return PaymentStatus.AUTHORIZED;
   }
 

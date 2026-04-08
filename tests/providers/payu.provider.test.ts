@@ -64,7 +64,7 @@ describe('PayUProvider', () => {
     });
 
     expect(result.provider).toBe('PAYU');
-    expect(result.status).toBe(PaymentStatus.RESERVE_CANCEL);
+    expect(result.status).toBe(PaymentStatus.VOIDED);
     expect(result.providerReference).toBe('payu_reference_2');
   });
 });

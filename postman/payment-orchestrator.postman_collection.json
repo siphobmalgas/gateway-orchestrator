@@ -24,6 +24,14 @@
       "value": "http://localhost:3000"
     },
     {
+      "key": "returnUrl",
+      "value": "https://merchant.example.com/payu/return"
+    },
+    {
+      "key": "cancelUrl",
+      "value": "https://merchant.example.com/payu/cancel"
+    },
+    {
       "key": "idempotencyKey",
       "value": ""
     },
@@ -146,7 +154,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 150,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"CREDITCARD\",\n  \"transactionType\": \"PAYMENT\",\n  \"metadata\": {\n    \"secure3d\": true\n  }\n}"
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 150,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"CREDITCARD\",\n  \"transactionType\": \"PAYMENT\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{returnUrl}}\",\n    \"cancelUrl\": \"{{cancelUrl}}\"\n  },\n  \"metadata\": {\n    \"secure3d\": true\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/payment",
@@ -203,7 +211,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 200,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"OPEN_BANKING\",\n  \"transactionType\": \"PAYMENT\"\n}"
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 200,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"OPEN_BANKING\",\n  \"transactionType\": \"PAYMENT\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{returnUrl}}\",\n    \"cancelUrl\": \"{{cancelUrl}}\"\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/payment",
@@ -260,7 +268,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 300,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"PAYFLEX\",\n  \"transactionType\": \"PAYMENT\",\n  \"metadata\": {\n    \"firstName\": \"Sipho\",\n    \"lastName\": \"Mthembu\",\n    \"email\": \"sipho@example.com\",\n    \"mobile\": \"27821234567\"\n  }\n}"
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 300,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"PAYFLEX\",\n  \"transactionType\": \"PAYMENT\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{returnUrl}}\",\n    \"cancelUrl\": \"{{cancelUrl}}\"\n  },\n  \"metadata\": {\n    \"firstName\": \"Sipho\",\n    \"lastName\": \"Mthembu\",\n    \"email\": \"sipho@example.com\",\n    \"mobile\": \"27821234567\"\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/payment",
@@ -317,7 +325,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 500,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"EFT_PRO\",\n  \"transactionType\": \"PAYMENT\"\n}"
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 500,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"EFT_PRO\",\n  \"transactionType\": \"PAYMENT\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{returnUrl}}\",\n    \"cancelUrl\": \"{{cancelUrl}}\"\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/payment",
@@ -374,7 +382,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 220,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"MOBICRED\",\n  \"transactionType\": \"PAYMENT\"\n}"
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 220,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"MOBICRED\",\n  \"transactionType\": \"PAYMENT\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{returnUrl}}\",\n    \"cancelUrl\": \"{{cancelUrl}}\"\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/payment",
@@ -438,7 +446,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 120,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"CREDITCARD\",\n  \"transactionType\": \"RESERVE\",\n  \"metadata\": {\n    \"secure3d\": true\n  }\n}"
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 120,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"CREDITCARD\",\n  \"transactionType\": \"RESERVE\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{returnUrl}}\",\n    \"cancelUrl\": \"{{cancelUrl}}\"\n  },\n  \"metadata\": {\n    \"secure3d\": true\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/authorise",
@@ -495,7 +503,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 175,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"OPEN_BANKING\",\n  \"transactionType\": \"RESERVE\"\n}"
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 175,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"OPEN_BANKING\",\n  \"transactionType\": \"RESERVE\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{returnUrl}}\",\n    \"cancelUrl\": \"{{cancelUrl}}\"\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/authorise",
@@ -552,7 +560,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 300,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"PAYFLEX\",\n  \"transactionType\": \"RESERVE\",\n  \"metadata\": {\n    \"firstName\": \"Sipho\",\n    \"lastName\": \"Mthembu\",\n    \"email\": \"sipho@example.com\",\n    \"mobile\": \"27821234567\"\n  }\n}"
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 300,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"PAYFLEX\",\n  \"transactionType\": \"RESERVE\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{returnUrl}}\",\n    \"cancelUrl\": \"{{cancelUrl}}\"\n  },\n  \"metadata\": {\n    \"firstName\": \"Sipho\",\n    \"lastName\": \"Mthembu\",\n    \"email\": \"sipho@example.com\",\n    \"mobile\": \"27821234567\"\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/authorise",
@@ -609,7 +617,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 450,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"EFT_PRO\",\n  \"transactionType\": \"RESERVE\"\n}"
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 450,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"EFT_PRO\",\n  \"transactionType\": \"RESERVE\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{returnUrl}}\",\n    \"cancelUrl\": \"{{cancelUrl}}\"\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/authorise",
@@ -666,7 +674,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 220,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"MOBICRED\",\n  \"transactionType\": \"RESERVE\"\n}"
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 220,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"MOBICRED\",\n  \"transactionType\": \"RESERVE\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{returnUrl}}\",\n    \"cancelUrl\": \"{{cancelUrl}}\"\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/authorise",
@@ -729,7 +737,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 120,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"CREDITCARD\",\n  \"transactionType\": \"RESERVE\",\n  \"metadata\": {\n    \"secure3d\": true\n  }\n}"
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 120,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"CREDITCARD\",\n  \"transactionType\": \"RESERVE\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{returnUrl}}\",\n    \"cancelUrl\": \"{{cancelUrl}}\"\n  },\n  \"metadata\": {\n    \"secure3d\": true\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/payments",
@@ -782,7 +790,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 200,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"OPEN_BANKING\",\n  \"transactionType\": \"RESERVE\"\n}"
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 200,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"OPEN_BANKING\",\n  \"transactionType\": \"RESERVE\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{returnUrl}}\",\n    \"cancelUrl\": \"{{cancelUrl}}\"\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/payments",
@@ -835,7 +843,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 300,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"PAYFLEX\",\n  \"transactionType\": \"RESERVE\",\n  \"metadata\": {\n    \"firstName\": \"Sipho\",\n    \"lastName\": \"Mthembu\",\n    \"email\": \"sipho@example.com\",\n    \"mobile\": \"27821234567\"\n  }\n}"
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 300,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"PAYFLEX\",\n  \"transactionType\": \"RESERVE\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{returnUrl}}\",\n    \"cancelUrl\": \"{{cancelUrl}}\"\n  },\n  \"metadata\": {\n    \"firstName\": \"Sipho\",\n    \"lastName\": \"Mthembu\",\n    \"email\": \"sipho@example.com\",\n    \"mobile\": \"27821234567\"\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/payments",
@@ -888,7 +896,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 500,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"EFT_PRO\",\n  \"transactionType\": \"RESERVE\"\n}"
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 500,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"EFT_PRO\",\n  \"transactionType\": \"RESERVE\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{returnUrl}}\",\n    \"cancelUrl\": \"{{cancelUrl}}\"\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/payments",
@@ -941,7 +949,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 220,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"MOBICRED\",\n  \"transactionType\": \"RESERVE\"\n}"
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 220,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"MOBICRED\",\n  \"transactionType\": \"RESERVE\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{returnUrl}}\",\n    \"cancelUrl\": \"{{cancelUrl}}\"\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/payments",
@@ -958,7 +966,7 @@
     },
     {
       "name": "PayU – S2S Authorise Flow (doTransaction RESERVE)",
-      "description": "Server-to-server RESERVE via doTransaction. CREDITCARD only. Requires metadata.payuAuthorizeFlow=DO_TRANSACTION plus card/customer fields (cardNumber, cardExpiry, cvv, nameOnCard, firstName, lastName, mobile, email). Set metadata.secure3d=true to request 3DS and expect possible PENDING + redirectUrl.",
+      "description": "Server-to-server RESERVE via doTransaction. CREDITCARD only. Requires metadata.payuAuthorizeFlow=DO_TRANSACTION plus card/customer fields (cardNumber, cardExpiry, cvv, nameOnCard, firstName, lastName, mobile, email). Set metadata.secure3d=true to request 3DS. Current PayU staging may still return immediate AUTHORIZED even when 3DS is requested; if PayU invokes 3DS, expect PENDING_3DS or PENDING with a redirectUrl.",
       "item": [
         {
           "name": "S2S RESERVE – CREDITCARD (doTransaction baseline)",
@@ -1002,7 +1010,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 120,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"CREDITCARD\",\n  \"transactionType\": \"RESERVE\",\n  \"metadata\": {\n    \"payuAuthorizeFlow\": \"DO_TRANSACTION\",\n    \"firstName\": \"Sipho\",\n    \"lastName\": \"Mthembu\",\n    \"email\": \"sipho@example.com\",\n    \"mobile\": \"27821234567\",\n    \"cardNumber\": \"4111120000005078\",\n    \"cardExpiry\": \"122030\",\n    \"cvv\": \"123\",\n    \"nameOnCard\": \"Sipho Mthembu\"\n  }\n}"
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 120,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"CREDITCARD\",\n  \"transactionType\": \"RESERVE\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{returnUrl}}\",\n    \"cancelUrl\": \"{{cancelUrl}}\"\n  },\n  \"metadata\": {\n    \"payuAuthorizeFlow\": \"DO_TRANSACTION\",\n    \"firstName\": \"Sipho\",\n    \"lastName\": \"Mthembu\",\n    \"email\": \"sipho@example.com\",\n    \"mobile\": \"27821234567\",\n    \"cardNumber\": \"4111120000005078\",\n    \"cardExpiry\": \"122030\",\n    \"cvv\": \"123\",\n    \"nameOnCard\": \"Sipho Mthembu\"\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/authorise",
@@ -1037,8 +1045,8 @@
                   "pm.collectionVariables.set('paymentId', json.id);",
                   "pm.collectionVariables.set('providerReference', json.providerReference);",
                   "pm.test('has providerReference', function () { pm.expect(json.providerReference).to.be.a('string'); });",
-                  "pm.test('status is AUTHORIZED, PENDING, or FAILED', function () { pm.expect(['AUTHORIZED', 'PENDING', 'FAILED']).to.include(json.status); });",
-                  "if (json.status === 'PENDING') {",
+                  "pm.test('status is AUTHORIZED, PENDING, PENDING_3DS, or FAILED', function () { pm.expect(['AUTHORIZED', 'PENDING', 'PENDING_3DS', 'FAILED']).to.include(json.status); });",
+                  "if (json.status === 'PENDING' || json.status === 'PENDING_3DS') {",
                   "  pm.test('pending 3DS has redirectUrl', function () { pm.expect(json.redirectUrl || json.checkoutUrl).to.be.a('string'); });",
                   "  pm.test('pending 3DS has inlineRedirect', function () { pm.expect(json.inlineRedirect).to.be.an('object'); });",
                   "  pm.test('pending 3DS inlineRedirect matches redirect url', function () { pm.expect(json.inlineRedirect.url).to.eql(json.redirectUrl || json.checkoutUrl); });",
@@ -1061,7 +1069,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 120,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"CREDITCARD\",\n  \"transactionType\": \"RESERVE\",\n  \"metadata\": {\n    \"payuAuthorizeFlow\": \"DO_TRANSACTION\",\n    \"secure3d\": true,\n    \"firstName\": \"Sipho\",\n    \"lastName\": \"Mthembu\",\n    \"email\": \"sipho@example.com\",\n    \"mobile\": \"27821234567\",\n    \"cardNumber\": \"4111120000005078\",\n    \"cardExpiry\": \"122030\",\n    \"cvv\": \"123\",\n    \"nameOnCard\": \"Sipho Mthembu\"\n  }\n}"
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 120,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"CREDITCARD\",\n  \"transactionType\": \"RESERVE\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{returnUrl}}\",\n    \"cancelUrl\": \"{{cancelUrl}}\"\n  },\n  \"metadata\": {\n    \"payuAuthorizeFlow\": \"DO_TRANSACTION\",\n    \"secure3d\": true,\n    \"firstName\": \"Sipho\",\n    \"lastName\": \"Mthembu\",\n    \"email\": \"sipho@example.com\",\n    \"mobile\": \"27821234567\",\n    \"cardNumber\": \"4000015372250142\",\n    \"cardExpiry\": \"122030\",\n    \"cvv\": \"123\",\n    \"nameOnCard\": \"Sipho Mthembu\"\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/authorise",
@@ -1078,7 +1086,7 @@
     },
     {
       "name": "PayU – Operations",
-      "description": "Post-payment S2S operations. Replay the verified live sequence in this order: 1) create an AUTHORIZED RESERVE with the S2S /authorise CREDITCARD doTransaction request, 2) run FINALIZE on that payment, 3) run CREDIT on the finalized payment, 4) create a second AUTHORIZED RESERVE, 5) run RESERVE_CANCEL on the second payment. These requests now reflect the successful live sequence validated against PayU staging.",
+      "description": "Post-payment PayU S2S doTransaction operations. Replay the verified live sequence in this order: 1) create an AUTHORIZED RESERVE with the S2S /authorise CREDITCARD doTransaction request, 2) run S2S FINALIZE on that payment, 3) run S2S CREDIT on the finalized payment, 4) create a second AUTHORIZED RESERVE, 5) run S2S RESERVE_CANCEL on the second payment. These requests reflect the successful live sequence validated against PayU staging.",
       "item": [
         {
           "name": "GET /payments/:id",
@@ -1112,6 +1120,7 @@
         },
         {
           "name": "GET /payments/:id/provider-status (getTransaction lookup)",
+          "description": "Uses PayU getTransaction with the documented sample payload shape: AdditionalInformation contains only payUReference. Verified live against staging after removing merchantReference from the lookup request.",
           "event": [
             {
               "listen": "test",
@@ -1125,8 +1134,10 @@
                   "pm.test('has mapped status', function () { pm.expect(json.status).to.be.a('string'); });",
                   "pm.test('has payuReference', function () { pm.expect(json.payuReference).to.be.a('string'); });",
                   "pm.test('has amountInCents', function () { pm.expect(json.amountInCents).to.be.a('number'); });",
+                  "pm.test('resultCode is present', function () { pm.expect(json.resultCode).to.be.a('string'); });",
+                  "pm.test('lookup did not hit known wiring error 301', function () { pm.expect(json.resultCode).to.not.eql('301'); });",
                   "pm.test('known transactionState', function () {",
-                  "  const valid = ['NEW','PROCESSING','SUCCESSFUL','FAILED','TIMEOUT','EXPIRED','AWAITING_PAYMENT'];",
+                  "  const valid = ['NEW','PROCESSING','SUCCESSFUL','FAILED','TIMEOUT','EXPIRED','AWAITING_PAYMENT','3DS_PENDING'];",
                   "  pm.expect(valid).to.include(json.transactionState);",
                   "});"
                 ]
@@ -1150,7 +1161,8 @@
           }
         },
         {
-          "name": "POST /payments/:id/capture (FINALIZE)",
+          "name": "POST /payments/:id/capture (S2S FINALIZE)",
+          "description": "PayU S2S doTransaction FINALIZE. Use this on an AUTHORIZED RESERVE payment created via the S2S /authorise request. Expected live outcome: CAPTURED.",
           "event": [
             {
               "listen": "test",
@@ -1191,7 +1203,8 @@
           }
         },
         {
-          "name": "POST /payments/:id/refund (CREDIT)",
+          "name": "POST /payments/:id/refund (S2S CREDIT)",
+          "description": "PayU S2S doTransaction CREDIT. Use this only after S2S FINALIZE has succeeded on the same payment. Expected live outcome: REFUNDED.",
           "event": [
             {
               "listen": "test",
@@ -1232,7 +1245,8 @@
           }
         },
         {
-          "name": "POST /payments/:id/void (RESERVE_CANCEL)",
+          "name": "POST /payments/:id/void (S2S RESERVE_CANCEL)",
+          "description": "PayU S2S doTransaction RESERVE_CANCEL. Use this on an AUTHORIZED RESERVE that has not been finalized. Expected live outcome: VOIDED.",
           "event": [
             {
               "listen": "test",
