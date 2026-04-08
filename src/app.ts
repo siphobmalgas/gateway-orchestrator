@@ -8,7 +8,7 @@ import { ProviderController } from './controllers/provider.controller';
 import { WebhookController } from './controllers/webhook.controller';
 import { errorHandler } from './middleware/error.middleware';
 import { requestIdMiddleware } from './middleware/request-id.middleware';
-import { PayFastProvider, PayUProvider, PeachProvider, StitchProvider } from './providers';
+import { PayFastProvider, PayFlexProvider, PayUProvider, PeachProvider, StitchProvider } from './providers';
 import { healthRoutes } from './routes/health.routes';
 import { paymentRoutes } from './routes/payment.routes';
 import { webhookRoutes } from './routes/webhook.routes';
@@ -35,6 +35,7 @@ import { logger } from './infrastructure/logger';
 const providers = {
   [PaymentProviderName.PAYU]: new PayUProvider(),
   [PaymentProviderName.PAYFAST]: new PayFastProvider(),
+  [PaymentProviderName.PAYFLEX]: new PayFlexProvider(),
   [PaymentProviderName.STITCH]: new StitchProvider(),
   [PaymentProviderName.PEACH]: new PeachProvider()
 };

@@ -1,6 +1,7 @@
 export enum PaymentProviderName {
   PAYU = 'PAYU',
   PAYFAST = 'PAYFAST',
+  PAYFLEX = 'PAYFLEX',
   STITCH = 'STITCH',
   PEACH = 'PEACH'
 }
