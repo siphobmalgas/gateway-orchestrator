@@ -14,13 +14,15 @@ export interface Payment {
 }
 
 const stateTransitions: Record<PaymentStatus, PaymentStatus[]> = {
-  [PaymentStatus.CREATED]: [PaymentStatus.AUTHORIZED,PaymentStatus.PENDING ,PaymentStatus.FAILED, PaymentStatus.DECLINED],
-  [PaymentStatus.PENDING]: [PaymentStatus.AUTHORIZED, PaymentStatus.FAILED, PaymentStatus.DECLINED],
-  [PaymentStatus.AUTHORIZED]: [PaymentStatus.CAPTURED, PaymentStatus.REFUNDED, PaymentStatus.FAILED],
-  [PaymentStatus.CAPTURED]: [PaymentStatus.REFUNDED],
+  [PaymentStatus.CREATED]: [PaymentStatus.AUTHORIZED, PaymentStatus.PENDING, PaymentStatus.FAILED, PaymentStatus.DECLINED],
+  [PaymentStatus.PENDING]: [PaymentStatus.AUTHORIZED, PaymentStatus.CAPTURED, PaymentStatus.FAILED, PaymentStatus.DECLINED, PaymentStatus.RESERVE_CANCEL, PaymentStatus.PAYMENT],
+  [PaymentStatus.AUTHORIZED]: [PaymentStatus.CAPTURED, PaymentStatus.REFUNDED, PaymentStatus.FAILED, PaymentStatus.RESERVE_CANCEL, PaymentStatus.PAYMENT],
+  [PaymentStatus.CAPTURED]: [PaymentStatus.REFUNDED, PaymentStatus.PAYMENT],
   [PaymentStatus.REFUNDED]: [],
   [PaymentStatus.FAILED]: [],
-  [PaymentStatus.DECLINED]: []
+  [PaymentStatus.DECLINED]: [],
+  [PaymentStatus.RESERVE_CANCEL]: [],
+  [PaymentStatus.PAYMENT]: []
 };
 
 export const ensureTransition = (from: PaymentStatus, to: PaymentStatus): void => {

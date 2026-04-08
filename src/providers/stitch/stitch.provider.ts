@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { env } from '../../config/env';
 import { PaymentProviderName, PaymentStatus } from '../../domain/enums';
-import { AuthorizeRequest, CaptureRequest, PaymentRequest, PaymentResponse, RefundRequest } from '../../domain/provider.interface';
+import { AuthorizeRequest, CaptureRequest, PaymentRequest, PaymentResponse, RefundRequest, VoidRequest } from '../../domain/provider.interface';
 import { BaseProvider } from '../shared/base.provider';
 
 export class StitchProvider extends BaseProvider {
@@ -58,6 +58,19 @@ export class StitchProvider extends BaseProvider {
       rawResponse: { simulated: true, endpoint: `${this.baseUrl}/refund` }
     });
     this.observeLatency('refund', startedAt);
+    return response;
+  }
+
+  async void(request: VoidRequest): Promise<PaymentResponse> {
+    const startedAt = Date.now();
+    const response = this.normalizeResponse({
+      providerReference: request.transactionId,
+      amount: request.amount,
+      currency: request.currency,
+      status: PaymentStatus.RESERVE_CANCEL,
+      rawResponse: { simulated: true, endpoint: `${this.baseUrl}/void` }
+    });
+    this.observeLatency('void', startedAt);
     return response;
   }
 }

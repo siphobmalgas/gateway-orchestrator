@@ -43,9 +43,17 @@ export interface RefundRequest {
   transactionId: string;
   amount: number;
   currency: string;
+  merchantReference?: string;
 }
 
 export interface CaptureRequest {
+  transactionId: string;
+  amount: number;
+  currency: string;
+  merchantReference?: string;
+}
+
+export interface VoidRequest {
   transactionId: string;
   amount: number;
   currency: string;
@@ -60,11 +68,31 @@ export interface WebhookEvent {
   rawPayload?: unknown;
 }
 
+export interface LookupTransactionRequest {
+  payuReference: string;
+  merchantReference?: string;
+}
+
+export interface LookupTransactionResult {
+  payuReference: string;
+  merchantReference: string;
+  transactionState: string;
+  transactionType: string;
+  status: PaymentStatus;
+  amountInCents: number;
+  currency: string;
+  resultCode: string;
+  resultMessage: string;
+  rawResponse?: unknown;
+}
+
 export interface PaymentProvider {
   payment(request: PaymentRequest): Promise<PaymentResponse>;
   authorize(request: AuthorizeRequest): Promise<PaymentResponse>;
   capture(request: CaptureRequest): Promise<PaymentResponse>;
   refund(request: RefundRequest): Promise<PaymentResponse>;
+  void(request: VoidRequest): Promise<PaymentResponse>;
   verifyWebhookSignature(payload: string, signature: string): boolean;
   handleWebhook(payload: unknown): Promise<WebhookEvent | null>;
+  lookupTransaction?(request: LookupTransactionRequest): Promise<LookupTransactionResult>;
 }

@@ -12,9 +12,20 @@ export enum PaymentStatus {
   FAILED = 'FAILED',
   REFUNDED = 'REFUNDED',
   DECLINED = 'DECLINED',
-  PENDING = 'PENDING'
+  PENDING = 'PENDING',
+  RESERVE_CANCEL = 'VOIDED',
+  PAYMENT = 'PAID'
+
 }
 
-export type PayURedirectPaymentMethod = 'CARD' | 'CREDITCARD' | 'EFT' | 'EFT_PRO' | 'MOBICRED';
-export type PayUTransactionType = 'PAYMENT' | 'RESERVE' | 'FINALIZE';
-export type PayUSetTransactionType = Exclude<PayUTransactionType, 'FINALIZE'>;
+export const PAYU_REDIRECT_PAYMENT_METHODS = ['OPEN_BANKING', 'CREDITCARD', 'PAYFLEX', 'EFT_PRO', 'MOBICRED'] as const;
+export type PayURedirectPaymentMethod = (typeof PAYU_REDIRECT_PAYMENT_METHODS)[number];
+
+export const PAYU_TRANSACTION_TYPES = ['PAYMENT', 'RESERVE', 'FINALIZE', 'CREDIT', 'RESERVE_CANCEL'] as const;
+export type PayUTransactionType = (typeof PAYU_TRANSACTION_TYPES)[number];
+
+export const PAYU_SET_TRANSACTION_TYPES = ['PAYMENT', 'RESERVE', 'CREDIT', 'RESERVE_CANCEL'] as const;
+export type PayUSetTransactionType = (typeof PAYU_SET_TRANSACTION_TYPES)[number];
+
+export const PAYU_TRANSACTION_STATES = ['NEW', 'PROCESSING', 'SUCCESSFUL', 'FAILED', 'TIMEOUT', 'EXPIRED', 'AWAITING_PAYMENT'] as const;
+export type PayUTransactionState = (typeof PAYU_TRANSACTION_STATES)[number];

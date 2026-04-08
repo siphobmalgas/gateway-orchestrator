@@ -16,7 +16,7 @@ Apply these instructions when generating code, reviewing changes, or answering i
 - Payment create/authorize/payment endpoints require `idempotency-key`; preserve this behavior.
 - Add or change request fields via Zod schemas in `src/utils/validators.ts` before controller changes.
 - Preserve payment response compatibility fields: `checkoutUrl`, `redirectLink`, `redirectUrl`, and `inlineRedirect`.
-- Keep endpoint behavior intact: `POST /payments` is authorize flow; `POST /authorise` is explicit authorize flow; `POST /payments/payment` is explicit payment flow.
+- Keep endpoint behavior intact: `POST /payments` is authorize flow; `POST /authorise` is explicit authorize flow; `POST /payment` is explicit payment flow.
 
 ## Persistence and logging rules
 - Use repository abstractions; do not bypass `PaymentLogRepository` for payment operation logs.

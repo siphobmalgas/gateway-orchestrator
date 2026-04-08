@@ -60,11 +60,12 @@ When enabled, the app persists:
 ## API endpoints
 
 - `POST /payments`
-- `POST /payments/payment`
+- `POST /payment`
 - `POST /authorise`
 - `GET /payments/:id`
 - `POST /payments/:id/capture`
 - `POST /payments/:id/refund`
+- `POST /payments/:id/void`
 - `POST /webhooks/payu`
 - `POST /webhooks/payfast`
 - `POST /webhooks/stitch`
@@ -77,7 +78,7 @@ When enabled, the app persists:
 For PayU redirect payments, call `POST /payments` with:
 
 - `provider`: `PAYU`
-- `paymentMethod`: `CARD` | `EFT` | `MOBICRED`
+- `paymentMethod`: `OPEN_BANKING` | `CREDITCARD` | `PAYFLEX` | `EFT_PRO` | `MOBICRED`
 - `transactionType`: `PAYMENT` | `RESERVE` (used in PayU setTransaction)
 - Optional `redirectContext`: `returnUrl`, `cancelUrl`, `notificationUrl`, `redirectChannel`
 
@@ -114,3 +115,10 @@ For inline embedding, use `inlineRedirect` from the same response:
 ```
 
 Use `inlineRedirect.url` as the iframe `src`. If iframe rendering is blocked in the browser, navigate to `fallbackUrl`.
+
+## PayU Server-to-Server Operations
+
+- `POST /authorise` with `metadata.payuAuthorizeFlow=DO_TRANSACTION` performs a PayU `RESERVE` S2S authorize for `CREDITCARD`.
+- `POST /payments/:id/capture` performs PayU `FINALIZE`.
+- `POST /payments/:id/refund` performs PayU `CREDIT`.
+- `POST /payments/:id/void` performs PayU `RESERVE_CANCEL` and returns status `VOIDED`.

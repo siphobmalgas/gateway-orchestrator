@@ -1,6 +1,6 @@
 import { createHmac } from 'crypto';
 import { PaymentProviderName, PaymentStatus } from '../../domain/enums';
-import { AuthorizeRequest, CaptureRequest, PaymentProvider, PaymentRequest, PaymentResponse, RefundRequest, WebhookEvent } from '../../domain/provider.interface';
+import { AuthorizeRequest, CaptureRequest, PaymentProvider, PaymentRequest, PaymentResponse, RefundRequest, VoidRequest, WebhookEvent } from '../../domain/provider.interface';
 import { providerLatencyHistogram } from '../../infrastructure/metrics';
 
 export abstract class BaseProvider implements PaymentProvider {
@@ -15,6 +15,7 @@ export abstract class BaseProvider implements PaymentProvider {
   abstract authorize(request: AuthorizeRequest): Promise<PaymentResponse>;
   abstract capture(request: CaptureRequest): Promise<PaymentResponse>;
   abstract refund(request: RefundRequest): Promise<PaymentResponse>;
+  abstract void(request: VoidRequest): Promise<PaymentResponse>;
 
   async handleWebhook(_: unknown): Promise<WebhookEvent | null> {
     return null;

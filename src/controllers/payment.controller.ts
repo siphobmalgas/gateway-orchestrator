@@ -132,6 +132,12 @@ export class PaymentController {
     res.status(200).json(logs);
   };
 
+  lookupProviderStatus = async (req: Request, res: Response): Promise<void> => {
+    const paymentId = requireStringParam(req.params.id, 'id');
+    const result = await this.paymentService.lookupProviderStatus(paymentId, extractHeaders(req.headers));
+    res.status(200).json(result);
+  };
+
   capture = async (req: Request, res: Response): Promise<void> => {
     const paymentId = requireStringParam(req.params.id, 'id');
     const payment = await this.paymentService.capturePayment(paymentId, extractHeaders(req.headers));
@@ -145,6 +151,18 @@ export class PaymentController {
       {
         paymentId,
         ...payload
+      },
+      extractHeaders(req.headers)
+    );
+
+    res.status(200).json(toPaymentResponse(payment));
+  };
+
+  void = async (req: Request, res: Response): Promise<void> => {
+    const paymentId = requireStringParam(req.params.id, 'id');
+    const payment = await this.paymentService.voidPayment(
+      {
+        paymentId
       },
       extractHeaders(req.headers)
     );

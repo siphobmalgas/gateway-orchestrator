@@ -37,6 +37,37 @@ export const requestWithRetry = async <T>(requestConfig: AxiosRequestConfig, tim
     }
   }
 
+  if (axios.isAxiosError(lastError)) {
+    const status = lastError.response?.status;
+    const statusText = lastError.response?.statusText;
+    const responseData = lastError.response?.data;
+
+    let responsePreview = '';
+    if (typeof responseData === 'string' && responseData.trim().length > 0) {
+      responsePreview = responseData.trim();
+    } else if (responseData !== undefined) {
+      try {
+        responsePreview = JSON.stringify(responseData);
+      } catch {
+        responsePreview = String(responseData);
+      }
+    }
+
+    if (responsePreview.length > 500) {
+      responsePreview = `${responsePreview.slice(0, 500)}...`;
+    }
+
+    const parts = [lastError.message];
+    if (status) {
+      parts.push(`status=${status}${statusText ? ` ${statusText}` : ''}`);
+    }
+    if (responsePreview) {
+      parts.push(`response=${responsePreview}`);
+    }
+
+    throw new Error(parts.join(' | '));
+  }
+
   if (lastError instanceof Error) {
     throw new Error(lastError.message);
   }

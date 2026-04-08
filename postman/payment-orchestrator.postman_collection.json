@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "b4f5229f-2c66-4b20-98f6-d7a3ec77f601",
     "name": "Payment Orchestrator API",
-    "description": "Collection for Payment, Authorize, Capture, Refund, Health, Metrics, and PayU IPN/Webhook flows.",
+    "description": "PayU payment, authorize (redirect + S2S), capture, refund, provider-status lookup, transaction logs, and IPN webhook flows. Covers all supported payment methods: OPEN_BANKING, CREDITCARD, PAYFLEX, EFT_PRO, MOBICRED.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [
@@ -19,11 +19,22 @@
     }
   ],
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:3000" },
-    { "key": "idempotencyKey", "value": "idem-{{timestamp}}" },
-    { "key": "paymentId", "value": "" },
-    { "key": "providerReference", "value": "" },
-    { "key": "responseHash", "value": "" }
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "idempotencyKey",
+      "value": ""
+    },
+    {
+      "key": "paymentId",
+      "value": ""
+    },
+    {
+      "key": "providerReference",
+      "value": ""
+    }
   ],
   "item": [
     {
@@ -36,8 +47,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/health",
-              "host": ["{{baseUrl}}"],
-              "path": ["health"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
             }
           },
           "event": [
@@ -47,8 +62,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
-                  "const json = pm.response.json();",
-                  "pm.test('health is ok', function () { pm.expect(json.status).to.eql('ok'); });"
+                  "pm.test('health is ok', function () { pm.expect(pm.response.json().status).to.eql('ok'); });"
                 ]
               }
             }
@@ -61,8 +75,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/metrics",
-              "host": ["{{baseUrl}}"],
-              "path": ["metrics"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "metrics"
+              ]
             }
           },
           "event": [
@@ -80,27 +98,21 @@
       ]
     },
     {
-      "name": "Payments",
+      "name": "PayU – Payment Flow (POST /payment)",
+      "description": "Explicit PAYMENT transactionType — initiates a direct charge redirect via setTransaction. Covers all five supported payment methods. The last request run sets paymentId and providerReference for use in Operations.",
       "item": [
         {
-          "name": "POST /payments/payment (PAYU)",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "idempotency-key", "value": "idem-payment-{{$timestamp}}" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 220,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"MOBICRED\",\n  \"transactionType\": \"PAYMENT\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/payments/payment",
-              "host": ["{{baseUrl}}"],
-              "path": ["payments", "payment"]
-            }
-          },
+          "name": "PAYMENT – CREDITCARD",
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-pay-cc-' + Date.now());"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -110,31 +122,55 @@
                   "const json = pm.response.json();",
                   "pm.collectionVariables.set('paymentId', json.id);",
                   "pm.collectionVariables.set('providerReference', json.providerReference);",
-                  "pm.test('checkoutUrl exists', function () { pm.expect(json.checkoutUrl).to.include('PayUReference='); });"
+                  "pm.test('has providerReference', function () { pm.expect(json.providerReference).to.be.a('string'); });",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });",
+                  "pm.test('has redirectUrl', function () { pm.expect(json.redirectUrl || json.checkoutUrl).to.be.a('string'); });",
+                  "pm.test('has inlineRedirect', function () { pm.expect(json.inlineRedirect).to.be.an('object'); });",
+                  "pm.test('inlineRedirect is iframe-ready', function () { pm.expect(json.inlineRedirect).to.include({ mode: 'IFRAME', method: 'GET' }); });",
+                  "pm.test('inlineRedirect url matches redirect url', function () { pm.expect(json.inlineRedirect.url).to.eql(json.redirectUrl || json.checkoutUrl); });"
                 ]
               }
             }
-          ]
-        },
-        {
-          "name": "POST /payments/authorize (PAYU)",
+          ],
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "idempotency-key", "value": "idem-authorize-{{$timestamp}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotencyKey}}"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 120,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"CARD\",\n  \"transactionType\": \"RESERVE\"\n}"
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 150,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"CREDITCARD\",\n  \"transactionType\": \"PAYMENT\",\n  \"metadata\": {\n    \"secure3d\": true\n  }\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/payments/authorize",
-              "host": ["{{baseUrl}}"],
-              "path": ["payments", "authorize"]
+              "raw": "{{baseUrl}}/payment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payment"
+              ]
             }
-          },
+          }
+        },
+        {
+          "name": "PAYMENT – OPEN_BANKING",
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-pay-ob-' + Date.now());"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -143,115 +179,909 @@
                   "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
                   "const json = pm.response.json();",
                   "pm.collectionVariables.set('paymentId', json.id);",
-                  "pm.collectionVariables.set('providerReference', json.providerReference);"
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });",
+                  "pm.test('has redirectUrl', function () { pm.expect(json.redirectUrl || json.checkoutUrl).to.be.a('string'); });",
+                  "pm.test('has inlineRedirect', function () { pm.expect(json.inlineRedirect).to.be.an('object'); });",
+                  "pm.test('inlineRedirect is iframe-ready', function () { pm.expect(json.inlineRedirect).to.include({ mode: 'IFRAME', method: 'GET' }); });",
+                  "pm.test('inlineRedirect url matches redirect url', function () { pm.expect(json.inlineRedirect.url).to.eql(json.redirectUrl || json.checkoutUrl); });"
                 ]
               }
             }
-          ]
-        },
-        {
-          "name": "GET /payments/:id",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/payments/{{paymentId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["payments", "{{paymentId}}"]
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "POST /payments/:id/capture",
+          ],
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotencyKey}}"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{}"
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 200,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"OPEN_BANKING\",\n  \"transactionType\": \"PAYMENT\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/payments/{{paymentId}}/capture",
-              "host": ["{{baseUrl}}"],
-              "path": ["payments", "{{paymentId}}", "capture"]
+              "raw": "{{baseUrl}}/payment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payment"
+              ]
             }
-          },
+          }
+        },
+        {
+          "name": "PAYMENT – PAYFLEX",
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-pay-pf-' + Date.now());"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });"
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });",
+                  "pm.test('has redirectUrl', function () { pm.expect(json.redirectUrl || json.checkoutUrl).to.be.a('string'); });",
+                  "pm.test('has inlineRedirect', function () { pm.expect(json.inlineRedirect).to.be.an('object'); });",
+                  "pm.test('inlineRedirect is iframe-ready', function () { pm.expect(json.inlineRedirect).to.include({ mode: 'IFRAME', method: 'GET' }); });",
+                  "pm.test('inlineRedirect url matches redirect url', function () { pm.expect(json.inlineRedirect.url).to.eql(json.redirectUrl || json.checkoutUrl); });"
                 ]
               }
             }
-          ]
-        },
-        {
-          "name": "POST /payments/:id/refund",
+          ],
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotencyKey}}"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"amount\": 50,\n  \"currency\": \"ZAR\"\n}"
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 300,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"PAYFLEX\",\n  \"transactionType\": \"PAYMENT\",\n  \"metadata\": {\n    \"firstName\": \"Sipho\",\n    \"lastName\": \"Mthembu\",\n    \"email\": \"sipho@example.com\",\n    \"mobile\": \"27821234567\"\n  }\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/payments/{{paymentId}}/refund",
-              "host": ["{{baseUrl}}"],
-              "path": ["payments", "{{paymentId}}", "refund"]
+              "raw": "{{baseUrl}}/payment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payment"
+              ]
             }
-          },
+          }
+        },
+        {
+          "name": "PAYMENT – EFT_PRO",
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-pay-eft-' + Date.now());"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });"
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });",
+                  "pm.test('has redirectUrl', function () { pm.expect(json.redirectUrl || json.checkoutUrl).to.be.a('string'); });",
+                  "pm.test('has inlineRedirect', function () { pm.expect(json.inlineRedirect).to.be.an('object'); });",
+                  "pm.test('inlineRedirect is iframe-ready', function () { pm.expect(json.inlineRedirect).to.include({ mode: 'IFRAME', method: 'GET' }); });",
+                  "pm.test('inlineRedirect url matches redirect url', function () { pm.expect(json.inlineRedirect.url).to.eql(json.redirectUrl || json.checkoutUrl); });"
                 ]
               }
             }
-          ]
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 500,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"EFT_PRO\",\n  \"transactionType\": \"PAYMENT\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payment"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PAYMENT – MOBICRED",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-pay-mob-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });",
+                  "pm.test('has redirectUrl', function () { pm.expect(json.redirectUrl || json.checkoutUrl).to.be.a('string'); });",
+                  "pm.test('has inlineRedirect', function () { pm.expect(json.inlineRedirect).to.be.an('object'); });",
+                  "pm.test('inlineRedirect is iframe-ready', function () { pm.expect(json.inlineRedirect).to.include({ mode: 'IFRAME', method: 'GET' }); });",
+                  "pm.test('inlineRedirect url matches redirect url', function () { pm.expect(json.inlineRedirect.url).to.eql(json.redirectUrl || json.checkoutUrl); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 220,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"MOBICRED\",\n  \"transactionType\": \"PAYMENT\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payment"
+              ]
+            }
+          }
         }
       ]
     },
     {
-      "name": "Webhooks",
+      "name": "PayU – Authorise Redirect Flow (POST /authorise)",
+      "description": "RESERVE transactionType via setTransaction — returns a hosted payment page URL. Covers all five payment methods.",
       "item": [
         {
-          "name": "POST /webhooks/payu (IPN XML no signature)",
+          "name": "RESERVE – CREDITCARD (redirect)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-auth-cc-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('has providerReference', function () { pm.expect(json.providerReference).to.be.a('string'); });",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });",
+                  "pm.test('has redirectUrl', function () { pm.expect(json.redirectUrl || json.checkoutUrl).to.be.a('string'); });",
+                  "pm.test('has inlineRedirect', function () { pm.expect(json.inlineRedirect).to.be.an('object'); });",
+                  "pm.test('inlineRedirect is iframe-ready', function () { pm.expect(json.inlineRedirect).to.include({ mode: 'IFRAME', method: 'GET' }); });",
+                  "pm.test('inlineRedirect url matches redirect url', function () { pm.expect(json.inlineRedirect.url).to.eql(json.redirectUrl || json.checkoutUrl); });"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "text/xml" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotencyKey}}"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<PaymentNotification>\n  <MerchantReference>{{paymentId}}</MerchantReference>\n  <TransactionType>PAYMENT</TransactionType>\n  <TransactionState>SUCCESSFUL</TransactionState>\n  <ResultCode>00</ResultCode>\n  <ResultMessage>Successful</ResultMessage>\n  <PayUReference>{{providerReference}}</PayUReference>\n  <IpnExtraInfo>\n    <ResponseHash>ipn-{{$guid}}</ResponseHash>\n  </IpnExtraInfo>\n</PaymentNotification>"
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 120,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"CREDITCARD\",\n  \"transactionType\": \"RESERVE\",\n  \"metadata\": {\n    \"secure3d\": true\n  }\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/webhooks/payu",
-              "host": ["{{baseUrl}}"],
-              "path": ["webhooks", "payu"]
+              "raw": "{{baseUrl}}/authorise",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "authorise"
+              ]
             }
-          },
+          }
+        },
+        {
+          "name": "RESERVE – OPEN_BANKING (redirect)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-auth-ob-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });",
+                  "pm.test('has redirectUrl', function () { pm.expect(json.redirectUrl || json.checkoutUrl).to.be.a('string'); });",
+                  "pm.test('has inlineRedirect', function () { pm.expect(json.inlineRedirect).to.be.an('object'); });",
+                  "pm.test('inlineRedirect is iframe-ready', function () { pm.expect(json.inlineRedirect).to.include({ mode: 'IFRAME', method: 'GET' }); });",
+                  "pm.test('inlineRedirect url matches redirect url', function () { pm.expect(json.inlineRedirect.url).to.eql(json.redirectUrl || json.checkoutUrl); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 175,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"OPEN_BANKING\",\n  \"transactionType\": \"RESERVE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/authorise",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "authorise"
+              ]
+            }
+          }
+        },
+        {
+          "name": "RESERVE – PAYFLEX (redirect)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-auth-pf-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });",
+                  "pm.test('has redirectUrl', function () { pm.expect(json.redirectUrl || json.checkoutUrl).to.be.a('string'); });",
+                  "pm.test('has inlineRedirect', function () { pm.expect(json.inlineRedirect).to.be.an('object'); });",
+                  "pm.test('inlineRedirect is iframe-ready', function () { pm.expect(json.inlineRedirect).to.include({ mode: 'IFRAME', method: 'GET' }); });",
+                  "pm.test('inlineRedirect url matches redirect url', function () { pm.expect(json.inlineRedirect.url).to.eql(json.redirectUrl || json.checkoutUrl); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 300,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"PAYFLEX\",\n  \"transactionType\": \"RESERVE\",\n  \"metadata\": {\n    \"firstName\": \"Sipho\",\n    \"lastName\": \"Mthembu\",\n    \"email\": \"sipho@example.com\",\n    \"mobile\": \"27821234567\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/authorise",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "authorise"
+              ]
+            }
+          }
+        },
+        {
+          "name": "RESERVE – EFT_PRO (redirect)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-auth-eft-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });",
+                  "pm.test('has redirectUrl', function () { pm.expect(json.redirectUrl || json.checkoutUrl).to.be.a('string'); });",
+                  "pm.test('has inlineRedirect', function () { pm.expect(json.inlineRedirect).to.be.an('object'); });",
+                  "pm.test('inlineRedirect is iframe-ready', function () { pm.expect(json.inlineRedirect).to.include({ mode: 'IFRAME', method: 'GET' }); });",
+                  "pm.test('inlineRedirect url matches redirect url', function () { pm.expect(json.inlineRedirect.url).to.eql(json.redirectUrl || json.checkoutUrl); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 450,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"EFT_PRO\",\n  \"transactionType\": \"RESERVE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/authorise",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "authorise"
+              ]
+            }
+          }
+        },
+        {
+          "name": "RESERVE – MOBICRED (redirect)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-auth-mob-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });",
+                  "pm.test('has redirectUrl', function () { pm.expect(json.redirectUrl || json.checkoutUrl).to.be.a('string'); });",
+                  "pm.test('has inlineRedirect', function () { pm.expect(json.inlineRedirect).to.be.an('object'); });",
+                  "pm.test('inlineRedirect is iframe-ready', function () { pm.expect(json.inlineRedirect).to.include({ mode: 'IFRAME', method: 'GET' }); });",
+                  "pm.test('inlineRedirect url matches redirect url', function () { pm.expect(json.inlineRedirect.url).to.eql(json.redirectUrl || json.checkoutUrl); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 220,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"MOBICRED\",\n  \"transactionType\": \"RESERVE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/authorise",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "authorise"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "PayU – Create Payment Flow (POST /payments)",
+      "description": "Alias of the authorize flow via POST /payments — behaves identically to /authorise. Covers all five payment methods.",
+      "item": [
+        {
+          "name": "CREATE – CREDITCARD",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-create-cc-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });",
+                  "pm.test('has redirectUrl', function () { pm.expect(json.redirectUrl || json.checkoutUrl).to.be.a('string'); });",
+                  "pm.test('has inlineRedirect', function () { pm.expect(json.inlineRedirect).to.be.an('object'); });",
+                  "pm.test('inlineRedirect is iframe-ready', function () { pm.expect(json.inlineRedirect).to.include({ mode: 'IFRAME', method: 'GET' }); });",
+                  "pm.test('inlineRedirect url matches redirect url', function () { pm.expect(json.inlineRedirect.url).to.eql(json.redirectUrl || json.checkoutUrl); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 120,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"CREDITCARD\",\n  \"transactionType\": \"RESERVE\",\n  \"metadata\": {\n    \"secure3d\": true\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CREATE – OPEN_BANKING",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-create-ob-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 200,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"OPEN_BANKING\",\n  \"transactionType\": \"RESERVE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CREATE – PAYFLEX",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-create-pf-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 300,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"PAYFLEX\",\n  \"transactionType\": \"RESERVE\",\n  \"metadata\": {\n    \"firstName\": \"Sipho\",\n    \"lastName\": \"Mthembu\",\n    \"email\": \"sipho@example.com\",\n    \"mobile\": \"27821234567\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CREATE – EFT_PRO",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-create-eft-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 500,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"EFT_PRO\",\n  \"transactionType\": \"RESERVE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CREATE – MOBICRED",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-create-mob-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 220,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"MOBICRED\",\n  \"transactionType\": \"RESERVE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "PayU – S2S Authorise Flow (doTransaction RESERVE)",
+      "description": "Server-to-server RESERVE via doTransaction. CREDITCARD only. Requires metadata.payuAuthorizeFlow=DO_TRANSACTION plus card/customer fields (cardNumber, cardExpiry, cvv, nameOnCard, firstName, lastName, mobile, email). Set metadata.secure3d=true to request 3DS and expect possible PENDING + redirectUrl.",
+      "item": [
+        {
+          "name": "S2S RESERVE – CREDITCARD (doTransaction baseline)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-s2s-cc-baseline-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('has providerReference', function () { pm.expect(json.providerReference).to.be.a('string'); });",
+                  "pm.test('status is AUTHORIZED or FAILED', function () { pm.expect(['AUTHORIZED', 'FAILED']).to.include(json.status); });",
+                  "pm.test('no redirectUrl on baseline flow', function () { pm.expect(json.redirectUrl).to.be.undefined; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 120,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"CREDITCARD\",\n  \"transactionType\": \"RESERVE\",\n  \"metadata\": {\n    \"payuAuthorizeFlow\": \"DO_TRANSACTION\",\n    \"firstName\": \"Sipho\",\n    \"lastName\": \"Mthembu\",\n    \"email\": \"sipho@example.com\",\n    \"mobile\": \"27821234567\",\n    \"cardNumber\": \"4111120000005078\",\n    \"cardExpiry\": \"122030\",\n    \"cvv\": \"123\",\n    \"nameOnCard\": \"Sipho Mthembu\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/authorise",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "authorise"
+              ]
+            }
+          }
+        },
+        {
+          "name": "S2S 3DS Happy Path – CREDITCARD (doTransaction)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-s2s-cc-3ds-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('has providerReference', function () { pm.expect(json.providerReference).to.be.a('string'); });",
+                  "pm.test('status is AUTHORIZED, PENDING, or FAILED', function () { pm.expect(['AUTHORIZED', 'PENDING', 'FAILED']).to.include(json.status); });",
+                  "if (json.status === 'PENDING') {",
+                  "  pm.test('pending 3DS has redirectUrl', function () { pm.expect(json.redirectUrl || json.checkoutUrl).to.be.a('string'); });",
+                  "  pm.test('pending 3DS has inlineRedirect', function () { pm.expect(json.inlineRedirect).to.be.an('object'); });",
+                  "  pm.test('pending 3DS inlineRedirect matches redirect url', function () { pm.expect(json.inlineRedirect.url).to.eql(json.redirectUrl || json.checkoutUrl); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 120,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"CREDITCARD\",\n  \"transactionType\": \"RESERVE\",\n  \"metadata\": {\n    \"payuAuthorizeFlow\": \"DO_TRANSACTION\",\n    \"secure3d\": true,\n    \"firstName\": \"Sipho\",\n    \"lastName\": \"Mthembu\",\n    \"email\": \"sipho@example.com\",\n    \"mobile\": \"27821234567\",\n    \"cardNumber\": \"4111120000005078\",\n    \"cardExpiry\": \"122030\",\n    \"cvv\": \"123\",\n    \"nameOnCard\": \"Sipho Mthembu\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/authorise",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "authorise"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "PayU – Operations",
+      "description": "Post-payment S2S operations. Replay the verified live sequence in this order: 1) create an AUTHORIZED RESERVE with the S2S /authorise CREDITCARD doTransaction request, 2) run FINALIZE on that payment, 3) run CREDIT on the finalized payment, 4) create a second AUTHORIZED RESERVE, 5) run RESERVE_CANCEL on the second payment. These requests now reflect the successful live sequence validated against PayU staging.",
+      "item": [
+        {
+          "name": "GET /payments/:id",
           "event": [
             {
               "listen": "test",
@@ -260,30 +1090,444 @@
                 "exec": [
                   "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
                   "const json = pm.response.json();",
-                  "pm.test('accepted true', function () { pm.expect(json.accepted).to.eql(true); });"
+                  "pm.test('id matches', function () { pm.expect(json.id).to.eql(pm.collectionVariables.get('paymentId')); });"
                 ]
               }
             }
-          ]
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/{{paymentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "{{paymentId}}"
+              ]
+            }
+          }
         },
         {
-          "name": "POST /webhooks/payu (invalid signature)",
+          "name": "GET /payments/:id/provider-status (getTransaction lookup)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('has transactionState', function () { pm.expect(json.transactionState).to.be.a('string'); });",
+                  "pm.test('has transactionType', function () { pm.expect(json.transactionType).to.be.a('string'); });",
+                  "pm.test('has mapped status', function () { pm.expect(json.status).to.be.a('string'); });",
+                  "pm.test('has payuReference', function () { pm.expect(json.payuReference).to.be.a('string'); });",
+                  "pm.test('has amountInCents', function () { pm.expect(json.amountInCents).to.be.a('number'); });",
+                  "pm.test('known transactionState', function () {",
+                  "  const valid = ['NEW','PROCESSING','SUCCESSFUL','FAILED','TIMEOUT','EXPIRED','AWAITING_PAYMENT'];",
+                  "  pm.expect(valid).to.include(json.transactionState);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/{{paymentId}}/provider-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "{{paymentId}}",
+                "provider-status"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /payments/:id/capture (FINALIZE)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('status is CAPTURED', function () { pm.expect(json.status).to.eql('CAPTURED'); });",
+                  "pm.test('providerReference is present', function () { pm.expect(json.providerReference).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "text/plain" },
-              { "key": "x-signature", "value": "invalid" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"event\":\"payment.updated\"}"
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/{{paymentId}}/capture",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "{{paymentId}}",
+                "capture"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /payments/:id/refund (CREDIT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('status is REFUNDED', function () { pm.expect(json.status).to.eql('REFUNDED'); });",
+                  "pm.test('providerReference is present', function () { pm.expect(json.providerReference).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 120,\n  \"currency\": \"ZAR\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/{{paymentId}}/refund",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "{{paymentId}}",
+                "refund"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /payments/:id/void (RESERVE_CANCEL)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('status is VOIDED', function () { pm.expect(json.status).to.eql('VOIDED'); });",
+                  "pm.test('providerReference is present', function () { pm.expect(json.providerReference).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/{{paymentId}}/void",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "{{paymentId}}",
+                "void"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /transactions/:id/logs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('is array', function () { pm.expect(pm.response.json()).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{paymentId}}/logs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{paymentId}}",
+                "logs"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /transactions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('is array', function () { pm.expect(pm.response.json()).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "description": "PayU IPN callbacks. ResponseHash in IpnExtraInfo is used for deduplication. Run a payment request first so paymentId and providerReference are populated.",
+      "item": [
+        {
+          "name": "IPN – PAYMENT SUCCESSFUL",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('accepted', function () { pm.expect(pm.response.json().accepted).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/xml"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<PaymentNotification>\n  <MerchantReference>{{paymentId}}</MerchantReference>\n  <TransactionType>PAYMENT</TransactionType>\n  <TransactionState>SUCCESSFUL</TransactionState>\n  <ResultCode>00</ResultCode>\n  <ResultMessage>Successful</ResultMessage>\n  <PayUReference>{{providerReference}}</PayUReference>\n  <IpnExtraInfo>\n    <ResponseHash>ipn-payment-{{$guid}}</ResponseHash>\n  </IpnExtraInfo>\n</PaymentNotification>"
             },
             "url": {
               "raw": "{{baseUrl}}/webhooks/payu",
-              "host": ["{{baseUrl}}"],
-              "path": ["webhooks", "payu"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "webhooks",
+                "payu"
+              ]
             }
-          },
+          }
+        },
+        {
+          "name": "IPN – RESERVE SUCCESSFUL (authorize confirmed)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('accepted', function () { pm.expect(pm.response.json().accepted).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/xml"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<PaymentNotification>\n  <MerchantReference>{{paymentId}}</MerchantReference>\n  <TransactionType>RESERVE</TransactionType>\n  <TransactionState>SUCCESSFUL</TransactionState>\n  <ResultCode>00</ResultCode>\n  <ResultMessage>Successful</ResultMessage>\n  <PayUReference>{{providerReference}}</PayUReference>\n  <IpnExtraInfo>\n    <ResponseHash>ipn-reserve-{{$guid}}</ResponseHash>\n  </IpnExtraInfo>\n</PaymentNotification>"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/payu",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "webhooks",
+                "payu"
+              ]
+            }
+          }
+        },
+        {
+          "name": "IPN – RESERVE_CANCEL (voided/VOIDED)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('accepted', function () { pm.expect(pm.response.json().accepted).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/xml"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<PaymentNotification>\n  <MerchantReference>{{paymentId}}</MerchantReference>\n  <TransactionType>RESERVE_CANCEL</TransactionType>\n  <TransactionState>SUCCESSFUL</TransactionState>\n  <ResultCode>00</ResultCode>\n  <ResultMessage>Successful</ResultMessage>\n  <PayUReference>{{providerReference}}</PayUReference>\n  <IpnExtraInfo>\n    <ResponseHash>ipn-rescancel-{{$guid}}</ResponseHash>\n  </IpnExtraInfo>\n</PaymentNotification>"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/payu",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "webhooks",
+                "payu"
+              ]
+            }
+          }
+        },
+        {
+          "name": "IPN – FINALIZE SUCCESSFUL (capture via IPN)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('accepted', function () { pm.expect(pm.response.json().accepted).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/xml"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<PaymentNotification>\n  <MerchantReference>{{paymentId}}</MerchantReference>\n  <TransactionType>FINALIZE</TransactionType>\n  <TransactionState>SUCCESSFUL</TransactionState>\n  <ResultCode>00</ResultCode>\n  <ResultMessage>Successful</ResultMessage>\n  <PayUReference>{{providerReference}}</PayUReference>\n  <IpnExtraInfo>\n    <ResponseHash>ipn-finalize-{{$guid}}</ResponseHash>\n  </IpnExtraInfo>\n</PaymentNotification>"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/payu",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "webhooks",
+                "payu"
+              ]
+            }
+          }
+        },
+        {
+          "name": "IPN – PAYMENT FAILED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('accepted', function () { pm.expect(pm.response.json().accepted).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/xml"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<PaymentNotification>\n  <MerchantReference>{{paymentId}}</MerchantReference>\n  <TransactionType>PAYMENT</TransactionType>\n  <TransactionState>FAILED</TransactionState>\n  <ResultCode>05</ResultCode>\n  <ResultMessage>Do not honor</ResultMessage>\n  <PayUReference>{{providerReference}}</PayUReference>\n  <IpnExtraInfo>\n    <ResponseHash>ipn-failed-{{$guid}}</ResponseHash>\n  </IpnExtraInfo>\n</PaymentNotification>"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/payu",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "webhooks",
+                "payu"
+              ]
+            }
+          }
+        },
+        {
+          "name": "IPN – invalid signature (expect 400)",
           "event": [
             {
               "listen": "test",
@@ -294,7 +1538,34 @@
                 ]
               }
             }
-          ]
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              },
+              {
+                "key": "x-signature",
+                "value": "invalid-signature"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"event\":\"payment.updated\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/payu",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "webhooks",
+                "payu"
+              ]
+            }
+          }
         }
       ]
     }

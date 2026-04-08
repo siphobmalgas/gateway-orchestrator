@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { PayURedirectPaymentMethod, PayUSetTransactionType, PaymentProviderName, PaymentStatus } from '../domain/enums';
 import { ensureTransition, Payment } from '../domain/payment.entity';
-import { PaymentProvider, RedirectContext } from '../domain/provider.interface';
+import { LookupTransactionResult, PaymentProvider, RedirectContext } from '../domain/provider.interface';
 import { logger } from '../infrastructure/logger';
 import { paymentAttemptCounter } from '../infrastructure/metrics';
 import { PaymentLog } from '../infrastructure/repositories/payment-log.repository';
@@ -24,6 +24,10 @@ export interface RefundPaymentInput {
   paymentId: string;
   amount: number;
   currency: string;
+}
+
+export interface VoidPaymentInput {
+  paymentId: string;
 }
 
 export class PaymentService {
@@ -126,8 +130,7 @@ export class PaymentService {
       merchantReference: payment.id
     });
 
-    ensureTransition(payment.status, response.status);
-    payment.status = response.status;
+    this.applyOperationResult(payment, response.status, response.providerReference, 'capture');
     payment.updatedAt = new Date();
     await this.paymentRepository.update(payment);
 
@@ -156,11 +159,11 @@ export class PaymentService {
     const response = await provider.refund({
       transactionId: payment.providerReference,
       amount: input.amount,
-      currency: input.currency
+      currency: input.currency,
+      merchantReference: payment.id
     });
 
-    ensureTransition(payment.status, response.status);
-    payment.status = response.status;
+    this.applyOperationResult(payment, response.status, response.providerReference, 'refund');
     payment.updatedAt = new Date();
     await this.paymentRepository.update(payment);
 
@@ -169,6 +172,39 @@ export class PaymentService {
       paymentId: payment.id,
       provider: payment.provider,
       request: { paymentId: payment.id, operation: 'refund', amount: input.amount, currency: input.currency },
+      response,
+      headers,
+      responseTimeMs: Date.now() - startedAt,
+      createdAt: new Date()
+    });
+
+    return payment;
+  }
+
+  async voidPayment(input: VoidPaymentInput, headers: Record<string, string | string[] | undefined>): Promise<Payment> {
+    const payment = await this.getExistingPayment(input.paymentId);
+    if (!payment.providerReference) {
+      throw new Error('Missing provider reference for void');
+    }
+
+    const provider = this.providers[payment.provider];
+    const startedAt = Date.now();
+    const response = await provider.void({
+      transactionId: payment.providerReference,
+      amount: payment.amount,
+      currency: payment.currency,
+      merchantReference: payment.id
+    });
+
+    this.applyOperationResult(payment, response.status, response.providerReference, 'void');
+    payment.updatedAt = new Date();
+    await this.paymentRepository.update(payment);
+
+    await this.paymentLogRepository.create({
+      id: randomUUID(),
+      paymentId: payment.id,
+      provider: payment.provider,
+      request: { paymentId: payment.id, operation: 'void' },
       response,
       headers,
       responseTimeMs: Date.now() - startedAt,
@@ -189,6 +225,52 @@ export class PaymentService {
   async listTransactionLogs(paymentId: string): Promise<PaymentLog[]> {
     await this.getExistingPayment(paymentId);
     return this.paymentLogRepository.listByPaymentId(paymentId);
+  }
+
+  async lookupProviderStatus(
+    paymentId: string,
+    headers: Record<string, string | string[] | undefined>
+  ): Promise<LookupTransactionResult> {
+    const payment = await this.getExistingPayment(paymentId);
+    if (!payment.providerReference) {
+      throw new Error(`No provider reference for payment: ${paymentId}`);
+    }
+
+    const provider = this.providers[payment.provider];
+    if (!provider.lookupTransaction) {
+      throw new Error(`Provider ${payment.provider} does not support transaction lookup`);
+    }
+
+    const startedAt = Date.now();
+    const result = await provider.lookupTransaction({
+      payuReference: payment.providerReference,
+      merchantReference: payment.id
+    });
+
+    if (result.payuReference && payment.providerReference !== result.payuReference) {
+      payment.providerReference = result.payuReference;
+    }
+
+    if (payment.status !== result.status) {
+      ensureTransition(payment.status, result.status);
+      payment.status = result.status;
+    }
+
+    payment.updatedAt = new Date();
+    await this.paymentRepository.update(payment);
+
+    await this.paymentLogRepository.create({
+      id: randomUUID(),
+      paymentId: payment.id,
+      provider: payment.provider,
+      request: { paymentId: payment.id, operation: 'provider-status-lookup', providerReference: payment.providerReference },
+      response: result,
+      headers,
+      responseTimeMs: Date.now() - startedAt,
+      createdAt: new Date()
+    });
+
+    return result;
   }
 
   async handleWebhook(providerName: PaymentProviderName, rawPayload: string, signature: string, parsedPayload: unknown): Promise<void> {
@@ -231,5 +313,29 @@ export class PaymentService {
       throw new Error(`Payment not found: ${paymentId}`);
     }
     return payment;
+  }
+
+  private applyOperationResult(
+    payment: Payment,
+    responseStatus: PaymentStatus,
+    providerReference: string | undefined,
+    operation: 'capture' | 'refund' | 'void'
+  ): void {
+    if (providerReference) {
+      payment.providerReference = providerReference;
+    }
+
+    if (responseStatus === PaymentStatus.FAILED) {
+      logger.warn('Provider operation failed; preserving current payment status', {
+        paymentId: payment.id,
+        operation,
+        currentStatus: payment.status,
+        providerReference: payment.providerReference
+      });
+      return;
+    }
+
+    ensureTransition(payment.status, responseStatus);
+    payment.status = responseStatus;
   }
 }
