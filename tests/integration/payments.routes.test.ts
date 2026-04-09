@@ -184,13 +184,25 @@ describe('Payments API', () => {
       .send({
         provider: 'PAYFLEX',
         amount: 199,
-        currency: 'ZAR'
+        currency: 'ZAR',
+        redirectContext: {
+          returnUrl: 'https://merchant.example.com/payflex/confirm',
+          cancelUrl: 'https://merchant.example.com/payflex/cancel',
+          notificationUrl: 'https://merchant.example.com/webhooks/payflex'
+        },
+        metadata: {
+          firstName: 'Sipho',
+          lastName: 'Mthembu',
+          email: 'payflextest+provider@gmail.com',
+          mobile: '0123456789'
+        }
       });
 
     expect(res.status).toBe(201);
     expect(res.body.provider).toBe('PAYFLEX');
-    expect(res.body.status).toBe('AUTHORIZED');
-    expect(res.body.providerReference).toContain('payflex_');
+    expect(res.body.status).toBe('PENDING');
+    expect(res.body.providerReference).toMatch(/[0-9a-f-]{36}/i);
+    expect(res.body.redirectUrl).toContain('checkout.payflex');
   });
 
   it('updates payment status to captured after successful payu ipn', async () => {
@@ -249,6 +261,26 @@ describe('Payments API', () => {
 
     expect(lookup.status).toBe(200);
     expect(lookup.body.status).toBe('AUTHORIZED');
+
+    const payment = await request(app).get(`/payments/${created.body.id}`);
+
+    expect(payment.status).toBe(200);
+    expect(payment.body.status).toBe('AUTHORIZED');
+  });
+
+  it('refreshes provider state when fetching a payment by id', async () => {
+    const created = await request(app)
+      .post('/payments')
+      .set('idempotency-key', 'idem-provider-refresh-get')
+      .send({
+        provider: 'PAYU',
+        amount: 120,
+        currency: 'ZAR',
+        transactionType: 'PAYMENT'
+      });
+
+    expect(created.status).toBe(201);
+    expect(created.body.status).toBe('PENDING');
 
     const payment = await request(app).get(`/payments/${created.body.id}`);
 

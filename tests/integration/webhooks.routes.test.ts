@@ -30,7 +30,12 @@ describe('Webhook API', () => {
   });
 
   it('accepts valid signed payflex webhook', async () => {
-    const payload = JSON.stringify({ event: 'payment.updated' });
+    const payload = JSON.stringify({
+      orderId: 'order-1',
+      orderStatus: 'Approved',
+      merchantReference: 'merchant-1',
+      amount: 100
+    });
     const signature = createHmac('sha256', 'payflex_dev_secret').update(payload).digest('hex');
 
     const res = await request(app)

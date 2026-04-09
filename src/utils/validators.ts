@@ -1,18 +1,28 @@
 import { z } from 'zod';
-import { PaymentProviderName, PAYU_REDIRECT_PAYMENT_METHODS, PAYU_SET_TRANSACTION_TYPES } from '../domain/enums';
+import { PaymentProviderName, PAYU_REDIRECT_PAYMENT_METHODS, PAYU_SET_TRANSACTION_TYPES, PEACH_PAYMENT_BRANDS, PEACH_PAYMENT_TYPES } from '../domain/enums';
 
-const payuMethodSchema = z.enum(PAYU_REDIRECT_PAYMENT_METHODS);
-const payuTransactionTypeSchema = z.enum(PAYU_SET_TRANSACTION_TYPES);
+const paymentMethodSchema = z.union([
+  z.enum(PAYU_REDIRECT_PAYMENT_METHODS),
+  z.enum(PEACH_PAYMENT_BRANDS)
+]);
+const transactionTypeSchema = z.union([
+  z.enum(PAYU_SET_TRANSACTION_TYPES),
+  z.enum(PEACH_PAYMENT_TYPES)
+]);
 const redirectChannelSchema = z.enum(['web', 'responsive', 'mobi']);
 const paymentMetadataSchema = z.record(z.unknown());
 
-const getMissingPayflexFields = (metadata: Record<string, unknown> | undefined): string[] => {
-  const requiredFields = ['firstName', 'lastName', 'mobile', 'email'] as const;
+const payflexRequiredFieldAliases = [
+  { label: 'firstName', keys: ['firstName', 'givenNames'] },
+  { label: 'lastName', keys: ['lastName', 'surname'] },
+  { label: 'mobile', keys: ['mobile', 'phoneNumber'] },
+  { label: 'email', keys: ['email'] }
+] as const;
 
-  return requiredFields.filter((field) => {
-    const value = metadata?.[field];
-    return typeof value !== 'string' || value.trim().length === 0;
-  });
+const getMissingPayflexFields = (metadata: Record<string, unknown> | undefined): string[] => {
+  return payflexRequiredFieldAliases
+    .filter(({ keys }) => !keys.some((key) => typeof metadata?.[key] === 'string' && metadata[key].trim().length > 0))
+    .map(({ label }) => label);
 };
 
 const getMissingS2SCardFields = (metadata: Record<string, unknown> | undefined): string[] => {
@@ -30,8 +40,8 @@ export const createPaymentSchema = z
     amount: z.number().positive(),
     currency: z.string().min(3).max(3).transform((value) => value.toUpperCase()),
     customerReference: z.string().optional(),
-    paymentMethod: payuMethodSchema.optional(),
-    transactionType: payuTransactionTypeSchema.optional(),
+    paymentMethod: paymentMethodSchema.optional(),
+    transactionType: transactionTypeSchema.optional(),
     redirectContext: z
       .object({
         returnUrl: z.string().url().optional(),
@@ -51,6 +61,37 @@ export const createPaymentSchema = z
           path: ['metadata'],
           message: `PAYFLEX requires metadata fields: ${missingFields.join(', ')}`
         });
+      }
+    }
+
+    if (value.provider === PaymentProviderName.PEACH) {
+      if (value.paymentMethod === 'PAYSHAP' && value.metadata) {
+        const bank = value.metadata['virtualAccount.bank'];
+        const accountId = value.metadata['virtualAccount.accountId'];
+        if (typeof bank !== 'string' || bank.trim().length === 0) {
+          context.addIssue({ code: z.ZodIssueCode.custom, path: ['metadata'], message: 'PAYSHAP requires metadata field: virtualAccount.bank' });
+        }
+        if (typeof accountId !== 'string' || accountId.trim().length === 0) {
+          context.addIssue({ code: z.ZodIssueCode.custom, path: ['metadata'], message: 'PAYSHAP requires metadata field: virtualAccount.accountId' });
+        }
+      }
+
+      if (value.paymentMethod === 'MOBICRED' && value.metadata) {
+        const accountId = value.metadata['virtualAccount.accountId'];
+        const password = value.metadata['virtualAccount.password'];
+        if (typeof accountId !== 'string' || accountId.trim().length === 0) {
+          context.addIssue({ code: z.ZodIssueCode.custom, path: ['metadata'], message: 'MOBICRED requires metadata field: virtualAccount.accountId' });
+        }
+        if (typeof password !== 'string' || password.trim().length === 0) {
+          context.addIssue({ code: z.ZodIssueCode.custom, path: ['metadata'], message: 'MOBICRED requires metadata field: virtualAccount.password' });
+        }
+      }
+
+      if (value.paymentMethod === 'RCSSTORECARDS' && value.metadata) {
+        const cardNumber = value.metadata['card.number'];
+        if (typeof cardNumber !== 'string' || cardNumber.trim().length === 0) {
+          context.addIssue({ code: z.ZodIssueCode.custom, path: ['metadata'], message: 'RCSSTORECARDS requires metadata field: card.number' });
+        }
       }
     }
 

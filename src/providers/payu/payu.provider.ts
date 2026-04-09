@@ -44,7 +44,7 @@ export class PayUProvider extends BaseProvider {
 
   async payment(request: PaymentRequest): Promise<PaymentResponse> {
     const startedAt = Date.now();
-    const supportedPaymentMethod = request.paymentMethod ?? DEFAULT_PAYU_METHOD;
+    const supportedPaymentMethod = (request.paymentMethod ?? DEFAULT_PAYU_METHOD) as PayURedirectPaymentMethod;
     const flow = await runPayuPaymentFlow(this.baseUrl, request, supportedPaymentMethod);
 
     const response = this.normalizeResponse({
@@ -68,8 +68,8 @@ export class PayUProvider extends BaseProvider {
   async authorize(request: AuthorizeRequest): Promise<PaymentResponse> {
     const startedAt = Date.now();
 
-    const supportedPaymentMethod = request.paymentMethod ?? DEFAULT_PAYU_METHOD;
-    const transactionType: PayUSetTransactionType = request.transactionType ?? 'RESERVE';
+    const supportedPaymentMethod = (request.paymentMethod ?? DEFAULT_PAYU_METHOD) as PayURedirectPaymentMethod;
+    const transactionType: PayUSetTransactionType = (request.transactionType ?? 'RESERVE') as PayUSetTransactionType;
 
     if (shouldUseReserveDoTransaction(request, supportedPaymentMethod, transactionType)) {
       const metadata = request.metadata;
