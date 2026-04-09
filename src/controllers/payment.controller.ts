@@ -112,7 +112,7 @@ export class PaymentController {
 
   getById = async (req: Request, res: Response): Promise<void> => {
     const paymentId = requireStringParam(req.params.id, 'id');
-    const payment = await this.paymentService.getPayment(paymentId);
+    const payment = await this.paymentService.getPayment(paymentId, extractHeaders(req.headers));
     if (!payment) {
       res.status(404).json({ error: 'Payment not found' });
       return;
@@ -121,8 +121,8 @@ export class PaymentController {
     res.status(200).json(toPaymentResponse(payment));
   };
 
-  listTransactions = async (_req: Request, res: Response): Promise<void> => {
-    const payments = await this.paymentService.listTransactions();
+  listTransactions = async (req: Request, res: Response): Promise<void> => {
+    const payments = await this.paymentService.listTransactions(extractHeaders(req.headers));
     res.status(200).json(payments.map((payment) => toPaymentResponse(payment)));
   };
 
