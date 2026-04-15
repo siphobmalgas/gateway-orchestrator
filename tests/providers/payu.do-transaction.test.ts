@@ -9,8 +9,20 @@ jest.mock('../../src/infrastructure/http.client', () => ({
 
 const mockedRequestWithRetry = requestWithRetry as jest.MockedFunction<typeof requestWithRetry>;
 
-const baseInput = {
+const payuConfig = {
   baseUrl: 'https://staging.payu.example/service/PayUAPI',
+  webhookSecret: 'payu-test-secret',
+  soapUsername: '200021',
+  soapPassword: 'WSAUFbw6',
+  safekey: '{07F70723-1B96-4B97-B891-7BF708594EEA}',
+  rppRedirectBaseUrl: 'https://staging.payu.example/rpp.do',
+  defaultReturnUrl: 'https://merchant.example.com/payu/return',
+  defaultCancelUrl: 'https://merchant.example.com/payu/cancel',
+  defaultNotificationUrl: 'https://merchant.example.com/webhooks/payu'
+};
+
+const baseInput = {
+  config: payuConfig,
   transactionId: 'payu_ref_123',
   amount: 100,
   currency: 'ZAR',
@@ -84,6 +96,8 @@ describe('PayU doTransaction status resolution', () => {
 
     const result = await runReserveDoTransaction({
       ...baseInput,
+      returnUrl: 'https://merchant.example.com/payments/return',
+      cancelUrl: 'https://merchant.example.com/payments/cancel',
       creditCard: {
         cardNumber: '4111111111111111',
         cardExpiry: '1228',
@@ -94,6 +108,61 @@ describe('PayU doTransaction status resolution', () => {
     });
 
     expect(result.status).toBe(PaymentStatus.PENDING_3DS);
+  });
+
+  it('includes merchant return and cancel urls in secure3d reserve payloads', async () => {
+    mockedRequestWithRetry.mockResolvedValue(`
+      <soapResponse>
+        <successful>true</successful>
+        <resultCode>P3DS</resultCode>
+        <transactionState>PROCESSING</transactionState>
+        <transactionType>RESERVE</transactionType>
+        <secure3DId>abc123</secure3DId>
+        <secure3DUrl><![CDATA[https://example.com/3ds]]></secure3DUrl>
+        <payUReference>payu_ref_123</payUReference>
+      </soapResponse>
+    `);
+
+    await runReserveDoTransaction({
+      ...baseInput,
+      returnUrl: 'https://merchant.example.com/payments/return',
+      cancelUrl: 'https://merchant.example.com/payments/cancel',
+      creditCard: {
+        cardNumber: '4111111111111111',
+        cardExpiry: '1228',
+        cvv: '123',
+        nameOnCard: 'Test User'
+      },
+      secure3d: true
+    });
+
+    expect(mockedRequestWithRetry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.stringContaining('<returnUrl>https://merchant.example.com/payments/return</returnUrl>')
+      })
+    );
+    expect(mockedRequestWithRetry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.stringContaining('<cancelUrl>https://merchant.example.com/payments/cancel</cancelUrl>')
+      })
+    );
+  });
+
+  it('rejects secure3d reserve requests without merchant return and cancel urls', async () => {
+    await expect(
+      runReserveDoTransaction({
+        ...baseInput,
+        creditCard: {
+          cardNumber: '4111111111111111',
+          cardExpiry: '1228',
+          cvv: '123',
+          nameOnCard: 'Test User'
+        },
+        secure3d: true
+      })
+    ).rejects.toThrow('redirectContext.returnUrl');
+
+    expect(mockedRequestWithRetry).not.toHaveBeenCalled();
   });
 
   it('prefers currentPayUReference when PayU returns a new operation reference', async () => {

@@ -1,6 +1,6 @@
-import { env } from '../../config/env';
 import { PayURedirectPaymentMethod, PayUSetTransactionType } from '../../domain/enums';
 import { AuthorizeRequest, PaymentRequest } from '../../domain/provider.interface';
+import { PayURuntimeConfig } from '../provider-runtime-config';
 import { createPaymentSetTransaction, createReserveSetTransaction } from './payu.set-transaction';
 
 export interface PayuRedirectFlowResult {
@@ -11,12 +11,12 @@ export interface PayuRedirectFlowResult {
 }
 
 export const runPayuPaymentFlow = async (
-  baseUrl: string,
+  config: PayURuntimeConfig,
   request: PaymentRequest,
   method: PayURedirectPaymentMethod
 ): Promise<PayuRedirectFlowResult> => {
-  const providerReference = await createPaymentSetTransaction(baseUrl, request, method);
-  const redirectUrl = `${env.payu.rppRedirectBaseUrl}?PayUReference=${encodeURIComponent(providerReference)}`;
+  const providerReference = await createPaymentSetTransaction(config, request, method);
+  const redirectUrl = `${config.rppRedirectBaseUrl}?PayUReference=${encodeURIComponent(providerReference)}`;
 
   return {
     providerReference,
@@ -27,13 +27,13 @@ export const runPayuPaymentFlow = async (
 };
 
 export const runPayuReserveFlow = async (
-  baseUrl: string,
+  config: PayURuntimeConfig,
   request: AuthorizeRequest,
   method: PayURedirectPaymentMethod,
   transactionType: PayUSetTransactionType
 ): Promise<PayuRedirectFlowResult> => {
-  const providerReference = await createReserveSetTransaction(baseUrl, request, method, transactionType);
-  const redirectUrl = `${env.payu.rppRedirectBaseUrl}?PayUReference=${encodeURIComponent(providerReference)}`;
+  const providerReference = await createReserveSetTransaction(config, request, method, transactionType);
+  const redirectUrl = `${config.rppRedirectBaseUrl}?PayUReference=${encodeURIComponent(providerReference)}`;
 
   return {
     providerReference,

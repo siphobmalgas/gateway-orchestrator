@@ -1,0 +1,12 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run payment orchestrator (local dbs)",
+			"type": "shell",
+			"command": "MONGO_ENABLED=true MYSQL_ENABLED=true MYSQL_PORT=3307 npm run dev",
+			"isBackground": true,
+			"group": "build"
+		}
+	]
+}

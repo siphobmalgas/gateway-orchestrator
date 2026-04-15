@@ -2,6 +2,7 @@ import { env } from '../../config/env';
 import { PaymentStatus } from '../../domain/enums';
 import { LookupTransactionRequest, LookupTransactionResult } from '../../domain/provider.interface';
 import { requestWithRetry } from '../../infrastructure/http.client';
+import { PayURuntimeConfig } from '../provider-runtime-config';
 import { escapeXml, readTag } from './payu.xml';
 
 /**
@@ -50,10 +51,10 @@ export const mapTransactionState = (transactionState: string, transactionType: s
   }
 };
 
-export type GetTransactionInput = LookupTransactionRequest & { baseUrl: string };
+export type GetTransactionInput = LookupTransactionRequest & { config: PayURuntimeConfig };
 
 export const getTransaction = async (input: GetTransactionInput): Promise<LookupTransactionResult> => {
-  const hasSoapCredentials = Boolean(env.payu.soapUsername && env.payu.soapPassword && env.payu.safekey);
+  const hasSoapCredentials = Boolean(input.config.soapUsername && input.config.soapPassword && input.config.safekey);
   const shouldCallSoap = hasSoapCredentials && env.nodeEnv !== 'test';
 
   if (!shouldCallSoap) {
@@ -69,7 +70,7 @@ export const getTransaction = async (input: GetTransactionInput): Promise<Lookup
       currency: 'ZAR',
       resultCode: '00',
       resultMessage: 'Simulated lookup',
-      rawResponse: { simulated: true, endpoint: `${input.baseUrl}/getTransaction` }
+      rawResponse: { simulated: true, endpoint: `${input.config.baseUrl}/getTransaction` }
     };
   }
 
@@ -78,15 +79,15 @@ export const getTransaction = async (input: GetTransactionInput): Promise<Lookup
   <SOAP-ENV:Header>
     <wsse:Security SOAP-ENV:mustUnderstand="1" xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">
       <wsse:UsernameToken wsu:Id="UsernameToken-9" xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">
-        <wsse:Username>${escapeXml(env.payu.soapUsername)}</wsse:Username>
-        <wsse:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText">${escapeXml(env.payu.soapPassword)}</wsse:Password>
+        <wsse:Username>${escapeXml(input.config.soapUsername)}</wsse:Username>
+        <wsse:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText">${escapeXml(input.config.soapPassword)}</wsse:Password>
       </wsse:UsernameToken>
     </wsse:Security>
   </SOAP-ENV:Header>
   <SOAP-ENV:Body>
     <ns1:getTransaction>
       <Api>ONE_ZERO</Api>
-      <Safekey>${escapeXml(env.payu.safekey)}</Safekey>
+      <Safekey>${escapeXml(input.config.safekey)}</Safekey>
       <AdditionalInformation>
         <payUReference>${escapeXml(input.payuReference ?? input.providerReference ?? '')}</payUReference>
       </AdditionalInformation>
@@ -96,7 +97,7 @@ export const getTransaction = async (input: GetTransactionInput): Promise<Lookup
 
   const soapResponse = await requestWithRetry<string>({
     method: 'POST',
-    url: input.baseUrl,
+    url: input.config.baseUrl,
     headers: {
       'Content-Type': 'text/xml; charset=utf-8',
       SOAPAction: 'getTransaction'
@@ -128,7 +129,7 @@ export const getTransaction = async (input: GetTransactionInput): Promise<Lookup
     resultMessage,
     rawResponse: {
       soapResponse,
-      endpoint: `${input.baseUrl}/getTransaction`,
+      endpoint: `${input.config.baseUrl}/getTransaction`,
       requestTrace,
       currentPayUReference: currentPayuReference || undefined
     }

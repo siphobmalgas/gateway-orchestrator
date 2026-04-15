@@ -2,15 +2,19 @@ import { env } from '../../config/env';
 import { PaymentStatus } from '../../domain/enums';
 import { requestWithRetry } from '../../infrastructure/http.client';
 import { logger } from '../../infrastructure/logger';
+import { PayURuntimeConfig } from '../provider-runtime-config';
+import { assertPublicCallbackUrls, requireMerchantRedirectUrl, resolveExternalCallbackUrl, resolveOptionalMerchantRedirectUrl } from './payu.callback-urls';
 import { mapTransactionState } from './payu.get-transaction';
 import { escapeXml, readTag } from './payu.xml';
 
 interface DoTransactionInput {
-  baseUrl: string;
+  config: PayURuntimeConfig;
   transactionId: string;
   amount: number;
   currency: string;
   merchantReference: string;
+  returnUrl?: string;
+  cancelUrl?: string;
   notificationUrl?: string;
   customer?: {
     merchantUserId?: string;
@@ -135,21 +139,39 @@ const executeDoTransaction = async (
   transactionType: 'FINALIZE' | 'RESERVE' | 'CREDIT' | 'RESERVE_CANCEL',
   simulatedStatus: PaymentStatus
 ): Promise<DoTransactionResult> => {
-  const hasSoapCredentials = Boolean(env.payu.soapUsername && env.payu.soapPassword && env.payu.safekey);
+  const secure3dRequested = input.secure3d === true;
+  const returnUrl = secure3dRequested
+    ? requireMerchantRedirectUrl(input.returnUrl, 'returnUrl', 'secure3d doTransaction')
+    : resolveOptionalMerchantRedirectUrl(input.returnUrl);
+  const cancelUrl = secure3dRequested
+    ? requireMerchantRedirectUrl(input.cancelUrl, 'cancelUrl', 'secure3d doTransaction')
+    : resolveOptionalMerchantRedirectUrl(input.cancelUrl);
+  const notificationUrl = resolveExternalCallbackUrl(input.notificationUrl ?? input.config.defaultNotificationUrl);
+
+  assertPublicCallbackUrls([returnUrl, cancelUrl, notificationUrl]);
+
+  logger.info('PayU doTransaction callback URLs', {
+    transactionType,
+    merchantReference: input.merchantReference,
+    returnUrl,
+    cancelUrl,
+    notificationUrl,
+    secure3dRequested
+  });
+
+  const hasSoapCredentials = Boolean(input.config.soapUsername && input.config.soapPassword && input.config.safekey);
   const shouldCallSoap = hasSoapCredentials && env.nodeEnv !== 'test';
 
   if (!shouldCallSoap) {
     return {
       providerReference: input.transactionId,
       status: simulatedStatus,
-      rawResponse: { simulated: true, endpoint: `${input.baseUrl}/doTransaction`, transactionType }
+      rawResponse: { simulated: true, endpoint: `${input.config.baseUrl}/doTransaction`, transactionType }
     };
   }
 
   const amountInCents = Math.round(input.amount * 100);
-  const notificationUrl = input.notificationUrl ?? env.payu.defaultNotificationUrl;
   const shouldIncludePayUReference = transactionType !== 'RESERVE';
-  const secure3dRequested = input.secure3d === true;
   const shouldIncludeBasketDescription = transactionType === 'RESERVE' || transactionType === 'FINALIZE';
 
   const normalizedCardExpiry = normalizeCardExpiry(input.creditCard?.cardExpiry);
@@ -177,20 +199,22 @@ const executeDoTransaction = async (
   <SOAP-ENV:Header>
     <wsse:Security SOAP-ENV:mustUnderstand="1" xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">
       <wsse:UsernameToken wsu:Id="UsernameToken-9" xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">
-        <wsse:Username>${escapeXml(env.payu.soapUsername)}</wsse:Username>
-        <wsse:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText">${escapeXml(env.payu.soapPassword)}</wsse:Password>
+        <wsse:Username>${escapeXml(input.config.soapUsername)}</wsse:Username>
+        <wsse:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText">${escapeXml(input.config.soapPassword)}</wsse:Password>
       </wsse:UsernameToken>
     </wsse:Security>
   </SOAP-ENV:Header>
   <SOAP-ENV:Body>
     <ns1:doTransaction>
       <Api>ONE_ZERO</Api>
-      <Safekey>${escapeXml(env.payu.safekey)}</Safekey>
+      <Safekey>${escapeXml(input.config.safekey)}</Safekey>
       <TransactionType>${transactionType}</TransactionType>
       <AdditionalInformation>
         <merchantReference>${escapeXml(input.merchantReference)}</merchantReference>
         ${shouldIncludePayUReference ? `<payUReference>${escapeXml(input.transactionId)}</payUReference>` : ''}
         ${xmlTag('notificationUrl', notificationUrl)}
+        ${xmlTag('returnUrl', returnUrl)}
+        ${xmlTag('cancelUrl', cancelUrl)}
         ${secure3dRequested ? '<secure3d>true</secure3d>' : ''}
       </AdditionalInformation>
       <Customer>
@@ -222,7 +246,7 @@ const executeDoTransaction = async (
 
   const soapResponse = await requestWithRetry<string>({
     method: 'POST',
-    url: input.baseUrl,
+    url: input.config.baseUrl,
     headers: {
       'Content-Type': 'text/xml; charset=utf-8',
       SOAPAction: 'doTransaction'
@@ -286,7 +310,7 @@ const executeDoTransaction = async (
       is3DSPending
     ),
     rawResponse: {
-      endpoint: `${input.baseUrl}/doTransaction`,
+      endpoint: `${input.config.baseUrl}/doTransaction`,
       transactionType,
       transactionState: responseTransactionState,
       resolvedTransactionType: responseTransactionType,

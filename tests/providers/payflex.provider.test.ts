@@ -11,7 +11,6 @@ jest.mock('../../src/infrastructure/http.client', () => ({
 const mockedRequestWithRetry = requestWithRetry as jest.MockedFunction<typeof requestWithRetry>;
 
 describe('PayFlexProvider', () => {
-  const provider = new PayFlexProvider();
   const originalNodeEnv = env.nodeEnv;
   const originalAuthUrl = env.payflex.authUrl;
   const originalAudience = env.payflex.audience;
@@ -38,6 +37,8 @@ describe('PayFlexProvider', () => {
   });
 
   it('creates a redirect order and returns pending payment', async () => {
+    const provider = new PayFlexProvider();
+
     mockedRequestWithRetry
       .mockResolvedValueOnce({ access_token: 'token-1', expires_in: 3600, token_type: 'Bearer' })
       .mockResolvedValueOnce({
@@ -70,6 +71,8 @@ describe('PayFlexProvider', () => {
   });
 
   it('rejects payment requests without mandatory customer metadata', async () => {
+    const provider = new PayFlexProvider();
+
     await expect(
       provider.payment({
         paymentId: 'payment_missing_fields',
@@ -85,6 +88,8 @@ describe('PayFlexProvider', () => {
   });
 
   it('caches the oauth token across multiple calls', async () => {
+    const provider = new PayFlexProvider();
+
     mockedRequestWithRetry
       .mockResolvedValueOnce({ access_token: 'token-1', expires_in: 3600, token_type: 'Bearer' })
       .mockResolvedValueOnce({
@@ -117,6 +122,8 @@ describe('PayFlexProvider', () => {
   });
 
   it('maps approved order lookups to captured', async () => {
+    const provider = new PayFlexProvider();
+
     mockedRequestWithRetry
       .mockResolvedValueOnce({ access_token: 'token-1', expires_in: 3600, token_type: 'Bearer' })
       .mockResolvedValueOnce({
@@ -134,6 +141,8 @@ describe('PayFlexProvider', () => {
   });
 
   it('supports refunds using orderId', async () => {
+    const provider = new PayFlexProvider();
+
     mockedRequestWithRetry
       .mockResolvedValueOnce({ access_token: 'token-1', expires_in: 3600, token_type: 'Bearer' })
       .mockResolvedValueOnce({
@@ -155,6 +164,8 @@ describe('PayFlexProvider', () => {
   });
 
   it('treats unsigned callbacks as valid and maps approved webhooks', async () => {
+    const provider = new PayFlexProvider();
+
     expect(provider.verifyWebhookSignature('{}', '')).toBe(true);
 
     const event = await provider.handleWebhook(JSON.stringify({
@@ -172,6 +183,8 @@ describe('PayFlexProvider', () => {
   });
 
   it('rejects unsupported capture and void operations', async () => {
+    const provider = new PayFlexProvider();
+
     await expect(provider.capture({ transactionId: 'order-1', amount: 0, currency: 'ZAR' })).rejects.toThrow(
       'PAYFLEX capture is not supported by the documented integration'
     );

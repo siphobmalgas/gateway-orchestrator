@@ -56,7 +56,7 @@ const mapIpnStatus = (
 
 export const hasPayuResponseHash = (payload: string): boolean => Boolean(readTag(payload, 'ResponseHash') || readTag(payload, 'responseHash'));
 
-export const parsePayuWebhook = (payload: unknown, processedIpnHashes: Set<string>): WebhookEvent | null => {
+export const parsePayuWebhook = (payload: unknown): WebhookEvent | null => {
   const raw = typeof payload === 'string' ? payload : JSON.stringify(payload);
 
   const merchantReference = readTag(raw, 'MerchantReference') ?? readTag(raw, 'merchantReference');
@@ -67,16 +67,8 @@ export const parsePayuWebhook = (payload: unknown, processedIpnHashes: Set<strin
   const successful = readTag(raw, 'Successful') ?? readTag(raw, 'successful');
   const responseHash = readTag(raw, 'ResponseHash') ?? readTag(raw, 'responseHash');
 
-  if (responseHash && processedIpnHashes.has(responseHash)) {
-    return null;
-  }
-
   if (!merchantReference || !payUReference || !transactionState) {
     return null;
-  }
-
-  if (responseHash) {
-    processedIpnHashes.add(responseHash);
   }
 
   return {

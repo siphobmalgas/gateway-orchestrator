@@ -4,64 +4,25 @@ import { PayURedirectPaymentMethod, PayUSetTransactionType } from '../../domain/
 import { PaymentRequest } from '../../domain/provider.interface';
 import { requestWithRetry } from '../../infrastructure/http.client';
 import { logger } from '../../infrastructure/logger';
+import { PayURuntimeConfig } from '../provider-runtime-config';
+import { assertPublicCallbackUrls, requireMerchantRedirectUrl, resolveExternalCallbackUrl } from './payu.callback-urls';
 import { escapeXml, readTag } from './payu.xml';
 
-const resolveExternalCallbackUrl = (urlValue: string): string => {
-  if (!env.publicBaseUrl) {
-    return urlValue;
-  }
-
-  try {
-    const callbackUrl = new URL(urlValue);
-    const isLocalHost = callbackUrl.hostname === 'localhost' || callbackUrl.hostname === '127.0.0.1';
-    if (!isLocalHost) {
-      return urlValue;
-    }
-
-    const externalBase = new URL(env.publicBaseUrl);
-    const rewrittenUrl = new URL(externalBase.toString());
-    rewrittenUrl.pathname = callbackUrl.pathname;
-    rewrittenUrl.search = callbackUrl.search;
-    rewrittenUrl.hash = callbackUrl.hash;
-    return rewrittenUrl.toString();
-  } catch {
-    return urlValue;
-  }
-};
-
-const isLocalCallbackUrl = (urlValue: string): boolean => {
-  try {
-    const callbackUrl = new URL(urlValue);
-    return callbackUrl.hostname === 'localhost' || callbackUrl.hostname === '127.0.0.1';
-  } catch {
-    return false;
-  }
-};
-
 interface SetTransactionInput {
-  baseUrl: string;
+  config: PayURuntimeConfig;
   request: PaymentRequest;
   paymentMethod: PayURedirectPaymentMethod;
   transactionType: PayUSetTransactionType;
 }
 
 const createSetTransaction = async (input: SetTransactionInput): Promise<string> => {
-  const hasSoapCredentials = Boolean(env.payu.soapUsername && env.payu.soapPassword && env.payu.safekey);
-  const shouldCallSoap = hasSoapCredentials && env.nodeEnv !== 'test';
-
-  if (!shouldCallSoap) {
-    return `payu_${randomUUID()}`;
-  }
-
   const amountInCents = Math.round(input.request.amount * 100);
   const merchantReference = input.request.paymentId;
-  const returnUrl = resolveExternalCallbackUrl(input.request.redirectContext?.returnUrl ?? env.payu.defaultReturnUrl);
-  const cancelUrl = resolveExternalCallbackUrl(input.request.redirectContext?.cancelUrl ?? env.payu.defaultCancelUrl);
-  const notificationUrl = resolveExternalCallbackUrl(input.request.redirectContext?.notificationUrl ?? env.payu.defaultNotificationUrl);
+  const returnUrl = requireMerchantRedirectUrl(input.request.redirectContext?.returnUrl, 'returnUrl', 'redirect payments');
+  const cancelUrl = requireMerchantRedirectUrl(input.request.redirectContext?.cancelUrl, 'cancelUrl', 'redirect payments');
+  const notificationUrl = resolveExternalCallbackUrl(input.request.redirectContext?.notificationUrl ?? input.config.defaultNotificationUrl);
 
-  if (isLocalCallbackUrl(returnUrl) || isLocalCallbackUrl(cancelUrl) || isLocalCallbackUrl(notificationUrl)) {
-    throw new Error('PayU callback URLs cannot use localhost. Set PUBLIC_BASE_URL or explicit public PAYU_*_URL values.');
-  }
+  assertPublicCallbackUrls([returnUrl, cancelUrl, notificationUrl]);
 
   logger.info('PayU setTransaction callback URLs', {
     merchantReference,
@@ -69,6 +30,13 @@ const createSetTransaction = async (input: SetTransactionInput): Promise<string>
     cancelUrl,
     notificationUrl
   });
+
+  const hasSoapCredentials = Boolean(input.config.soapUsername && input.config.soapPassword && input.config.safekey);
+  const shouldCallSoap = hasSoapCredentials && env.nodeEnv !== 'test';
+
+  if (!shouldCallSoap) {
+    return `payu_${randomUUID()}`;
+  }
 
   const redirectChannel = input.request.redirectContext?.redirectChannel ?? 'responsive';
   const metadata = input.request.metadata ?? {};
@@ -92,15 +60,15 @@ const createSetTransaction = async (input: SetTransactionInput): Promise<string>
   <SOAP-ENV:Header>
     <wsse:Security SOAP-ENV:mustUnderstand="1" xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">
       <wsse:UsernameToken wsu:Id="UsernameToken-9" xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">
-        <wsse:Username>${escapeXml(env.payu.soapUsername)}</wsse:Username>
-        <wsse:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText">${escapeXml(env.payu.soapPassword)}</wsse:Password>
+        <wsse:Username>${escapeXml(input.config.soapUsername)}</wsse:Username>
+        <wsse:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText">${escapeXml(input.config.soapPassword)}</wsse:Password>
       </wsse:UsernameToken>
     </wsse:Security>
   </SOAP-ENV:Header>
   <SOAP-ENV:Body>
     <ns1:setTransaction>
       <Api>ONE_ZERO</Api>
-      <Safekey>${escapeXml(env.payu.safekey)}</Safekey>
+      <Safekey>${escapeXml(input.config.safekey)}</Safekey>
       <TransactionType>${escapeXml(input.transactionType)}</TransactionType>
       <AdditionalInformation>
         <merchantReference>${escapeXml(merchantReference)}</merchantReference>
@@ -126,14 +94,14 @@ const createSetTransaction = async (input: SetTransactionInput): Promise<string>
 
   logger.info('PayU setTransaction SOAP request', {
     merchantReference,
-    endpoint: input.baseUrl,
+    endpoint: input.config.baseUrl,
     soapAction: 'setTransaction',
     payload
   });
 
   const soapResponse = await requestWithRetry<string>({
     method: 'POST',
-    url: input.baseUrl,
+    url: input.config.baseUrl,
     headers: {
       'Content-Type': 'text/xml; charset=utf-8',
       SOAPAction: 'setTransaction'
@@ -153,22 +121,22 @@ const createSetTransaction = async (input: SetTransactionInput): Promise<string>
   return payUReference;
 };
 
-export const createPaymentSetTransaction = async (baseUrl: string, request: PaymentRequest, paymentMethod: PayURedirectPaymentMethod): Promise<string> =>
+export const createPaymentSetTransaction = async (config: PayURuntimeConfig, request: PaymentRequest, paymentMethod: PayURedirectPaymentMethod): Promise<string> =>
   createSetTransaction({
-    baseUrl,
+    config,
     request,
     paymentMethod,
     transactionType: 'PAYMENT'
   });
 
 export const createReserveSetTransaction = async (
-  baseUrl: string,
+  config: PayURuntimeConfig,
   request: PaymentRequest,
   paymentMethod: PayURedirectPaymentMethod,
   transactionType: PayUSetTransactionType
 ): Promise<string> =>
   createSetTransaction({
-    baseUrl,
+    config,
     request,
     paymentMethod,
     transactionType
