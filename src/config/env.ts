@@ -66,8 +66,6 @@ export const env = {
     soapUsername: process.env.PAYU_SOAP_USERNAME ?? '200021',
     soapPassword: process.env.PAYU_SOAP_PASSWORD ?? 'WSAUFbw6',
     rppRedirectBaseUrl: process.env.PAYU_RPP_REDIRECT_BASE_URL ?? 'https://staging.payu.co.za/rpp.do',
-    defaultReturnUrl: process.env.PAYU_RETURN_URL ?? `${defaultPublicBaseUrl}/payu/return`,
-    defaultCancelUrl: process.env.PAYU_CANCEL_URL ?? `${defaultPublicBaseUrl}/payu/cancel`,
     defaultNotificationUrl: process.env.PAYU_NOTIFICATION_URL ?? `${defaultPublicBaseUrl}/webhooks/payu`,
     webhookSecret: requireEnv(process.env.PAYU_WEBHOOK_SECRET ?? 'payu_dev_secret', 'PAYU_WEBHOOK_SECRET')
   },
@@ -94,5 +92,10 @@ export const env = {
     baseUrl: process.env.PEACH_BASE_URL ?? 'https://sandbox.peachpayments.com',
     apiKey: process.env.PEACH_API_KEY ?? '',
     webhookSecret: requireEnv(process.env.PEACH_WEBHOOK_SECRET ?? 'peach_dev_secret', 'PEACH_WEBHOOK_SECRET')
+  },
+  polling: {
+    enabled: (process.env.POLLING_ENABLED ?? 'false').toLowerCase() === 'true',
+    intervalMs: Number(process.env.POLLING_INTERVAL_MS ?? 15000),
+    batchSize: Number(process.env.POLLING_BATCH_SIZE ?? 20)
   }
 };

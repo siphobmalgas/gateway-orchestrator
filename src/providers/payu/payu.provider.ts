@@ -31,9 +31,8 @@ const readMetadataBoolean = (metadata: Record<string, unknown> | undefined, key:
   return false;
 };
 
-const shouldUseReserveDoTransaction = (request: AuthorizeRequest, method: PayURedirectPaymentMethod, transactionType: PayUSetTransactionType): boolean => {
-  const flowSelector = typeof request.metadata?.payuAuthorizeFlow === 'string' ? request.metadata.payuAuthorizeFlow.toUpperCase() : '';
-  return method === 'CREDITCARD' && transactionType === 'RESERVE' && flowSelector === 'DO_TRANSACTION';
+const shouldUseReserveDoTransaction = (request: AuthorizeRequest): boolean => {
+  return request.flowType === 'SERVER_TO_SERVER';
 };
 
 export class PayUProvider extends BaseProvider {
@@ -46,8 +45,6 @@ export class PayUProvider extends BaseProvider {
     soapPassword: env.payu.soapPassword,
     safekey: env.payu.safekey,
     rppRedirectBaseUrl: env.payu.rppRedirectBaseUrl,
-    defaultReturnUrl: env.payu.defaultReturnUrl,
-    defaultCancelUrl: env.payu.defaultCancelUrl,
     defaultNotificationUrl: env.payu.defaultNotificationUrl
   }) {
     super(PaymentProviderName.PAYU, config.baseUrl, '', config.webhookSecret);
@@ -83,7 +80,7 @@ export class PayUProvider extends BaseProvider {
     const supportedPaymentMethod = request.paymentMethod ?? DEFAULT_PAYU_METHOD;
     const transactionType: PayUSetTransactionType = request.transactionType ?? 'RESERVE';
 
-    if (shouldUseReserveDoTransaction(request, supportedPaymentMethod, transactionType)) {
+    if (shouldUseReserveDoTransaction(request)) {
       const metadata = request.metadata;
       const result = await runReserveDoTransaction({
         config: this.config,

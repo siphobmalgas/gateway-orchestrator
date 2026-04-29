@@ -18,8 +18,6 @@ const resolvePayUConfig = (credential?: ProviderCredential | null): PayURuntimeC
   soapPassword: credential?.payuCredentials?.password ?? credential?.soapPassword ?? env.payu.soapPassword,
   safekey: credential?.payuCredentials?.safekey ?? credential?.safekey ?? env.payu.safekey,
   rppRedirectBaseUrl: credential?.payuCredentials?.redirectBaseUrl ?? credential?.redirectBaseUrl ?? env.payu.rppRedirectBaseUrl,
-  defaultReturnUrl: credential?.payuCredentials?.defaultReturnUrl ?? env.payu.defaultReturnUrl,
-  defaultCancelUrl: credential?.payuCredentials?.defaultCancelUrl ?? env.payu.defaultCancelUrl,
   defaultNotificationUrl: credential?.payuCredentials?.defaultNotificationUrl ?? env.payu.defaultNotificationUrl
 });
 

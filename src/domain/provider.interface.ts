@@ -1,4 +1,4 @@
-import { PayURedirectPaymentMethod, PayUSetTransactionType, PaymentProviderName, PaymentStatus } from './enums';
+import { PayUFlowType, PayURedirectPaymentMethod, PayUSetTransactionType, PaymentProviderName, PaymentStatus } from './enums';
 
 export interface RedirectContext {
   returnUrl?: string;
@@ -14,6 +14,7 @@ export interface PaymentRequest {
   customerReference?: string;
   paymentMethod?: PayURedirectPaymentMethod;
   transactionType?: PayUSetTransactionType;
+  flowType?: PayUFlowType;
   redirectContext?: RedirectContext;
   metadata?: Record<string, unknown>;
 }
@@ -25,6 +26,7 @@ export interface AuthorizeRequest {
   customerReference?: string;
   paymentMethod?: PayURedirectPaymentMethod;
   transactionType?: PayUSetTransactionType;
+  flowType?: PayUFlowType;
   redirectContext?: RedirectContext;
   metadata?: Record<string, unknown>;
 }
@@ -66,6 +68,10 @@ export interface WebhookEvent {
   status?: PaymentStatus;
   responseHash?: string;
   rawPayload?: unknown;
+  transactionType?: string;
+  transactionState?: string;
+  resultCode?: string;
+  resultMessage?: string;
 }
 
 export interface LookupTransactionRequest {

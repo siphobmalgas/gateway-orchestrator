@@ -1,0 +1,355 @@
+-- =========================================================
+-- PAYMENT ORCHESTRATOR DATABASE DESIGN
+-- =========================================================
+--
+-- PERSISTENCE SPLIT:
+--
+-- MySQL (this schema) is used for:
+--   - Merchant registration (relational data)
+--   - Payment transaction state & lifecycle
+--   - Payment operations (CAPTURE, REFUND, VOID)
+--   - Provider request/response audit logs
+--   - Webhook event processing & deduplication
+--
+-- MongoDB is used for:
+--   - Provider credentials (secrets, API keys)
+--   - Routing rules (config-driven provider selection)
+--
+-- In-memory is used (test mode) when neither DB is enabled.
+--
+-- =========================================================
+
+-- =========================================================
+-- 1. MERCHANTS
+-- =========================================================
+-- Entity: Merchant (src/domain/merchant.entity.ts)
+-- Repository: MerchantRepository → MySqlMerchantRepository
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS merchants (
+  id           VARCHAR(36) PRIMARY KEY,
+  merchant_identifier VARCHAR(128) NOT NULL,
+  merchant_name       VARCHAR(255) NOT NULL,
+  metadata     JSON NULL,
+  created_at   DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at   DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uq_merchants_identifier (merchant_identifier)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================================
+-- 2. PAYMENTS (core transaction record)
+-- =========================================================
+-- Entity: Payment (src/domain/payment.entity.ts)
+-- Repository: PaymentRepository → MySqlPaymentRepository
+-- State machine: CREATED → AUTHORIZED → CAPTURED → REFUNDED
+--                CREATED → PENDING → AUTHORIZED/CAPTURED
+--                CREATED → PENDING_3DS → AUTHORIZED/CAPTURED
+--                AUTHORIZED → VOIDED
+--                * → FAILED / DECLINED (terminal)
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS payments (
+  id                   VARCHAR(36) PRIMARY KEY,
+  merchant_identifier  VARCHAR(128) NOT NULL DEFAULT '',
+  provider             VARCHAR(32)  NOT NULL,            -- PaymentProviderName enum
+  amount               DECIMAL(18, 2) NOT NULL,
+  currency             VARCHAR(3)   NOT NULL,
+  status               VARCHAR(32)  NOT NULL,            -- PaymentStatus enum
+  provider_reference   VARCHAR(255) NULL,
+  checkout_url         TEXT NULL,
+  idempotency_key      VARCHAR(255) NOT NULL,
+  initial_request_hash CHAR(64)     NULL,
+  created_at           DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at           DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uq_payments_scope_idempotency (merchant_identifier, idempotency_key),
+  KEY idx_payments_provider (provider),
+  KEY idx_payments_status (status),
+  KEY idx_payments_provider_reference (provider_reference)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================================
+-- 3. PAYMENT LOGS (provider request/response audit trail)
+-- =========================================================
+-- Entity: PaymentLog (src/infrastructure/repositories/payment-log.repository.ts)
+-- Repository: PaymentLogRepository → MySqlPaymentLogRepository
+-- Stores raw HTTP request, response, headers for every
+-- external provider call for debugging & reconciliation.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS payment_logs (
+  id               VARCHAR(36) PRIMARY KEY,
+  payment_id       VARCHAR(36)  NOT NULL,
+  provider         VARCHAR(32)  NOT NULL,
+  request          JSON         NOT NULL,
+  response         JSON         NOT NULL,
+  headers          JSON         NOT NULL,
+  response_time_ms INT          NOT NULL,
+  created_at       DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  KEY idx_payment_logs_payment_id_created_at (payment_id, created_at),
+  CONSTRAINT fk_payment_logs_payment FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================================
+-- 4. PAYMENT OPERATIONS (CAPTURE / REFUND / VOID lifecycle)
+-- =========================================================
+-- Entity: PaymentOperation (src/domain/payment-operation.entity.ts)
+-- Repository: PaymentOperationRepository → MySqlPaymentOperationRepository
+-- Types: CAPTURE, REFUND, VOID
+-- States: STARTED, SUCCEEDED, FAILED
+-- Links back to parent payment for full audit trail.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS payment_operations (
+  id                       VARCHAR(36)    PRIMARY KEY,
+  payment_id               VARCHAR(36)    NOT NULL,
+  merchant_identifier      VARCHAR(128)   NOT NULL DEFAULT '',
+  provider                 VARCHAR(32)    NOT NULL,
+  type                     VARCHAR(16)    NOT NULL,           -- CAPTURE | REFUND | VOID
+  idempotency_key          VARCHAR(255)   NOT NULL,
+  request_hash             CHAR(64)       NOT NULL,
+  amount                   DECIMAL(18, 2) NULL,
+  currency                 VARCHAR(3)     NULL,
+  state                    VARCHAR(16)    NOT NULL,           -- STARTED | SUCCEEDED | FAILED
+  resulting_payment_status VARCHAR(32)    NULL,
+  provider_reference       VARCHAR(255)   NULL,
+  error_code               VARCHAR(64)    NULL,
+  error_message            TEXT           NULL,
+  created_at               DATETIME(3)    NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at               DATETIME(3)    NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uq_payment_operations_idempotency (payment_id, type, idempotency_key),
+  KEY idx_payment_operations_payment_id_created_at (payment_id, created_at),
+  CONSTRAINT fk_payment_operations_payment FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================================
+-- 5. WEBHOOK EVENTS (async provider notifications)
+-- =========================================================
+-- Entity: WebhookEventRecord (src/domain/webhook-event.entity.ts)
+-- Repository: WebhookEventRepository → MySqlWebhookEventRepository
+-- States: STARTED, SUCCEEDED, FAILED, IGNORED
+-- Handles deduplication via dedupe_key, stores raw payload
+-- and parsed event for reconciliation.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS webhook_events (
+  id                       VARCHAR(36) PRIMARY KEY,
+  provider                 VARCHAR(32)  NOT NULL,
+  payment_id               VARCHAR(36)  NULL,
+  merchant_reference       VARCHAR(255) NULL,
+  provider_reference       VARCHAR(255) NULL,
+  response_hash            VARCHAR(255) NULL,
+  payload_hash             CHAR(64)     NOT NULL,
+  dedupe_key               VARCHAR(255) NOT NULL,
+  signature                TEXT         NULL,
+  raw_payload              LONGTEXT     NOT NULL,
+  event                    JSON         NULL,
+  resulting_payment_status VARCHAR(32)  NULL,
+  state                    VARCHAR(16)  NOT NULL,
+  error_message            TEXT         NULL,
+  created_at               DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at               DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uq_webhook_events_dedupe_key (dedupe_key),
+  KEY idx_webhook_events_payment_id_created_at (payment_id, created_at),
+  KEY idx_webhook_events_provider_reference (provider_reference),
+  CONSTRAINT fk_webhook_events_payment FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================================
+-- MONGODB COLLECTIONS (not in this schema, documented here)
+-- =========================================================
+--
+-- provider_credentials
+--   Indexed: { merchantIdentifier, provider } UNIQUE
+--   Entity:  ProviderCredential (src/infrastructure/repositories/provider-config.repository.ts)
+--   Stores:  PayU/PayFlex/PayFast/Stitch/Peach credentials per merchant.
+--
+-- routing_rules
+--   Indexed: { id } UNIQUE, { merchantIdentifier, priority }
+--   Entity:  RoutingRule (src/infrastructure/repositories/provider-config.repository.ts)
+--   Stores:  Config-driven provider selection rules per merchant.
+--
+-- =========================================================
+
+);
+
+-- =========================================================
+-- 6. WEBHOOKS (IDEMPOTENT DESIGN)
+-- =========================================================
+
+CREATE TABLE webhook_event (
+id BIGINT AUTO_INCREMENT PRIMARY KEY,
+provider_id INT NOT NULL,
+
+```
+event_key VARCHAR(255), -- unique per provider event
+payload JSON,
+
+processed TINYINT(1) DEFAULT 0,
+
+created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+UNIQUE KEY uniq_event (event_key),
+
+FOREIGN KEY (provider_id) REFERENCES provider(id)
+```
+
+);
+
+-- =========================================================
+-- 7. ROUTING + FALLBACK ENGINE
+-- =========================================================
+
+CREATE TABLE routing_rule (
+id BIGINT AUTO_INCREMENT PRIMARY KEY,
+merchant_id BIGINT NOT NULL,
+
+```
+payment_method VARCHAR(50),
+
+condition_type VARCHAR(50), -- AMOUNT, BIN
+condition_value VARCHAR(100),
+
+provider_id INT NOT NULL,
+priority INT NOT NULL,
+
+enabled TINYINT(1) DEFAULT 1,
+
+FOREIGN KEY (merchant_id) REFERENCES merchant(id),
+FOREIGN KEY (provider_id) REFERENCES provider(id)
+```
+
+);
+
+-- =========================================================
+-- 8. IDEMPOTENCY
+-- =========================================================
+
+CREATE TABLE idempotency_key (
+id BIGINT AUTO_INCREMENT PRIMARY KEY,
+idempotency_key VARCHAR(255) NOT NULL,
+
+```
+request_hash VARCHAR(255),
+response JSON,
+
+created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+UNIQUE KEY uniq_idem (idempotency_key)
+```
+
+);
+
+-- =========================================================
+-- =========================================================
+-- EXECUTION LAYER (CRITICAL NEXT STEPS)
+-- =========================================================
+-- =========================================================
+
+-- =========================================================
+-- A. ROUTING EXECUTION LOGIC (PSEUDO SQL)
+-- =========================================================
+-- Step 1: Fetch eligible providers
+-----------------------------------
+
+-- SELECT * FROM routing_rule
+-- WHERE merchant_id = ?
+--   AND payment_method = ?
+--   AND enabled = 1
+-- ORDER BY priority ASC;
+
+## -- Step 2: Filter by merchant_provider (enabled providers only)
+
+-- JOIN merchant_provider mp
+--   ON mp.provider_id = routing_rule.provider_id
+-- WHERE mp.enabled = 1;
+
+-- Step 3: Execute in order:
+-- for each provider:
+--   create payment_attempt
+--   call provider
+--   if SUCCESS → stop
+--   if FAILURE → try next
+
+-- =========================================================
+-- B. FAILOVER STRATEGY
+-- =========================================================
+-- Failure classification:
+--------------------------
+
+-- HARD FAIL → do NOT retry
+--   - invalid card
+--   - insufficient funds
+-------------------------
+
+-- SOFT FAIL → retry next provider
+--   - timeout
+--   - network error
+--   - provider unavailable
+---------------------------
+
+-- Store classification in:
+-- payment_attempt.error_type
+
+-- =========================================================
+-- C. WEBHOOK PROCESSOR (IDEMPOTENT)
+-- =========================================================
+-- Step 1: Insert webhook
+-- INSERT IGNORE INTO webhook_event (event_key, provider_id, payload)
+---------------------------------------------------------------------
+
+## -- Step 2: If duplicate → ignore
+
+-- Step 3: Extract reference:
+--   PayFast → m_payment_id
+--   PayU → reference
+---------------------
+
+-- Step 4: Update:
+--   payment_intent.status
+--   payment_attempt.status
+---------------------------
+
+-- Step 5: Mark processed
+
+-- =========================================================
+-- D. RECONCILIATION QUERIES (VERY IMPORTANT)
+-- =========================================================
+
+## -- 1. Missing transactions (provider success but not captured internally)
+
+-- SELECT pt.provider_txn_id
+-- FROM provider_transaction pt
+-- LEFT JOIN payment_intent pi
+--   ON pt.provider_txn_id = pi.reference
+-- WHERE pi.id IS NULL;
+
+## -- 2. Status mismatch
+
+-- SELECT pi.reference, pi.status, pt.provider_status
+-- FROM payment_intent pi
+-- JOIN payment_attempt pa ON pa.payment_intent_id = pi.id
+-- JOIN provider_transaction pt ON pt.payment_attempt_id = pa.id
+-- WHERE pi.status <> pt.provider_status;
+
+## -- 3. Duplicate payments
+
+-- SELECT reference, COUNT(*)
+-- FROM payment_intent
+-- GROUP BY reference
+-- HAVING COUNT(*) > 1;
+
+-- =========================================================
+-- E. CRITICAL PRODUCTION RULES
+-- =========================================================
+------------------------------------------------------------
+
+-- 1. NEVER trust a single provider response
+-- 2. ALWAYS rely on webhook + reconciliation
+-- 3. ALL updates must go through payment_event
+-- 4. SYSTEM MUST BE IDEMPOTENT
+-- 5. RETRIES MUST BE CONTROLLED (avoid double charge)
+------------------------------------------------------
+
+-- =========================================================
+-- END OF FILE
+-- =========================================================

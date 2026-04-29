@@ -1,3 +1,13 @@
+CREATE TABLE IF NOT EXISTS merchants (
+  id VARCHAR(36) PRIMARY KEY,
+  merchant_identifier VARCHAR(128) NOT NULL,
+  merchant_name VARCHAR(255) NOT NULL,
+  metadata JSON NULL,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uq_merchants_identifier (merchant_identifier)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS payments (
   id VARCHAR(36) PRIMARY KEY,
   merchant_identifier VARCHAR(128) NOT NULL DEFAULT '',

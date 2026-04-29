@@ -19,8 +19,6 @@ const buildSeedProviderInputs = (): RegisterProviderInput[] => {
         safekey: env.payu.safekey,
         baseUrl: env.payu.baseUrl,
         redirectBaseUrl: env.payu.rppRedirectBaseUrl,
-        defaultReturnUrl: env.payu.defaultReturnUrl,
-        defaultCancelUrl: env.payu.defaultCancelUrl,
         defaultNotificationUrl: env.payu.defaultNotificationUrl,
         webhookSecret: env.payu.webhookSecret
       },

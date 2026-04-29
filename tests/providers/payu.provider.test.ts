@@ -36,9 +36,7 @@ describe('PayUProvider', () => {
       currency: 'ZAR',
       paymentMethod: 'CREDITCARD',
       transactionType: 'RESERVE',
-      metadata: {
-        payuAuthorizeFlow: 'DO_TRANSACTION'
-      }
+      flowType: 'SERVER_TO_SERVER'
     });
 
     expect(result.provider).toBe('PAYU');
@@ -57,8 +55,8 @@ describe('PayUProvider', () => {
         currency: 'ZAR',
         paymentMethod: 'CREDITCARD',
         transactionType: 'RESERVE',
+        flowType: 'SERVER_TO_SERVER',
         metadata: {
-          payuAuthorizeFlow: 'DO_TRANSACTION',
           secure3d: true
         }
       })

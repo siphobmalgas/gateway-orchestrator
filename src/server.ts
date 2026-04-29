@@ -2,7 +2,7 @@ import { env } from './config/env';
 import { logger } from './infrastructure/logger';
 import { seedMongoConfiguration } from './infrastructure/bootstrap/mongo-config.bootstrap';
 import { initializeMySqlPersistence } from './infrastructure/db/mysql.client';
-import { app, onboardingService } from './app';
+import { app, onboardingService, paymentPoller } from './app';
 
 const start = async (): Promise<void> => {
   if (env.mongo.enabled && env.nodeEnv !== 'test') {
@@ -15,6 +15,7 @@ const start = async (): Promise<void> => {
 
   app.listen(env.port, () => {
     logger.info('Payment orchestrator listening', { port: env.port, environment: env.nodeEnv });
+    paymentPoller.start();
   });
 };
 

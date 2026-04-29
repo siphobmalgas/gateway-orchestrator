@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { Collection, Filter } from 'mongodb';
 import { Merchant } from '../../domain/merchant.entity';
-import { PaymentProviderName } from '../../domain/enums';
+import { PaymentProviderName, PaymentStatus } from '../../domain/enums';
 import { PaymentOperation, PaymentOperationType } from '../../domain/payment-operation.entity';
 import { Payment } from '../../domain/payment.entity';
 import { WebhookEventRecord } from '../../domain/webhook-event.entity';
@@ -82,6 +82,12 @@ export class MongoPaymentRepository implements PaymentRepository {
   async update(payment: Payment): Promise<void> {
     const collection = await this.collection();
     await collection.updateOne({ id: payment.id }, { $set: payment }, { upsert: false });
+  }
+
+  async findByStatuses(statuses: PaymentStatus[]): Promise<Payment[]> {
+    const collection = await this.collection();
+    const payments = await collection.find({ status: { $in: statuses } }).sort({ createdAt: 1 }).toArray();
+    return payments.map((item) => sanitizeMongoDoc(item as Payment & { _id: unknown }));
   }
 
   async listAll(): Promise<Payment[]> {
@@ -248,6 +254,14 @@ export class MongoMerchantRepository implements MerchantRepository {
   async create(merchant: Merchant): Promise<void> {
     const collection = await this.collection();
     await collection.insertOne(merchant);
+  }
+
+  async update(merchant: Merchant): Promise<void> {
+    const collection = await this.collection();
+    await collection.updateOne(
+      { id: merchant.id },
+      { $set: { merchantName: merchant.merchantName, webhookUrl: merchant.webhookUrl, metadata: merchant.metadata, updatedAt: merchant.updatedAt } }
+    );
   }
 
   async findByMerchantIdentifier(merchantIdentifier: string): Promise<Merchant | null> {

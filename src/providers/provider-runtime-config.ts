@@ -5,8 +5,6 @@ export interface PayURuntimeConfig {
   soapPassword: string;
   safekey: string;
   rppRedirectBaseUrl: string;
-  defaultReturnUrl: string;
-  defaultCancelUrl: string;
   defaultNotificationUrl: string;
 }
 

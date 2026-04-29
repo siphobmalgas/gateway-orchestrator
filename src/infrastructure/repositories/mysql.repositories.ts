@@ -1,8 +1,13 @@
 import { RowDataPacket } from 'mysql2/promise';
+import { PaymentStatus } from '../../domain/enums';
+import { Merchant } from '../../domain/merchant.entity';
+import { MerchantNotification, MerchantNotificationState } from '../../domain/merchant-notification.entity';
 import { PaymentOperation, PaymentOperationType } from '../../domain/payment-operation.entity';
 import { Payment } from '../../domain/payment.entity';
 import { WebhookEventRecord } from '../../domain/webhook-event.entity';
 import { getMySqlPool } from '../db/mysql.client';
+import { MerchantRepository } from './merchant.repository';
+import { MerchantNotificationRepository } from './merchant-notification.repository';
 import { PaymentLog, PaymentLogRepository } from './payment-log.repository';
 import { PaymentOperationRepository } from './payment-operation.repository';
 import { PaymentRepository } from './payment.repository';
@@ -205,6 +210,17 @@ export class MySqlPaymentRepository implements PaymentRepository {
       [idempotencyKey, toStoredMerchantIdentifier(merchantIdentifier)]
     );
     return rows[0] ? mapPaymentRow(rows[0]) : null;
+  }
+
+  async findByStatuses(statuses: PaymentStatus[]): Promise<Payment[]> {
+    if (statuses.length === 0) return [];
+    const pool = await getMySqlPool();
+    const placeholders = statuses.map(() => '?').join(', ');
+    const [rows] = await pool.execute<PaymentRow[]>(
+      `SELECT * FROM payments WHERE status IN (${placeholders}) ORDER BY created_at ASC`,
+      statuses
+    );
+    return rows.map(mapPaymentRow);
   }
 
   async listAll(): Promise<Payment[]> {
@@ -492,5 +508,184 @@ export class MySqlWebhookEventRepository implements WebhookEventRepository {
         record.dedupeKey
       ]
     );
+  }
+}
+
+type MerchantRow = RowDataPacket & {
+  id: string;
+  merchant_identifier: string;
+  merchant_name: string;
+  webhook_url: string | null;
+  metadata: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+};
+
+const mapMerchantRow = (row: MerchantRow): Merchant => ({
+  id: row.id,
+  merchantIdentifier: row.merchant_identifier,
+  merchantName: row.merchant_name,
+  webhookUrl: row.webhook_url ?? undefined,
+  metadata: row.metadata ? fromJson(row.metadata) : undefined,
+  createdAt: toDate(row.created_at),
+  updatedAt: toDate(row.updated_at)
+});
+
+export class MySqlMerchantRepository implements MerchantRepository {
+  async create(merchant: Merchant): Promise<void> {
+    const pool = await getMySqlPool();
+    await pool.execute(
+      `
+        INSERT INTO merchants (
+          id,
+          merchant_identifier,
+          merchant_name,
+          webhook_url,
+          metadata,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        merchant.id,
+        merchant.merchantIdentifier,
+        merchant.merchantName,
+        merchant.webhookUrl ?? null,
+        toJson(merchant.metadata),
+        merchant.createdAt,
+        merchant.updatedAt
+      ]
+    );
+  }
+
+  async update(merchant: Merchant): Promise<void> {
+    const pool = await getMySqlPool();
+    await pool.execute(
+      `
+        UPDATE merchants SET
+          merchant_name = ?,
+          webhook_url = ?,
+          metadata = ?,
+          updated_at = ?
+        WHERE id = ?
+      `,
+      [
+        merchant.merchantName,
+        merchant.webhookUrl ?? null,
+        toJson(merchant.metadata),
+        merchant.updatedAt,
+        merchant.id
+      ]
+    );
+  }
+
+  async findByMerchantIdentifier(merchantIdentifier: string): Promise<Merchant | null> {
+    const pool = await getMySqlPool();
+    const [rows] = await pool.execute<MerchantRow[]>(
+      'SELECT * FROM merchants WHERE merchant_identifier = ? LIMIT 1',
+      [merchantIdentifier]
+    );
+    return rows[0] ? mapMerchantRow(rows[0]) : null;
+  }
+}
+
+type MerchantNotificationRow = RowDataPacket & {
+  id: string;
+  payment_id: string;
+  merchant_identifier: string;
+  event: string;
+  webhook_url: string;
+  request_payload: string;
+  response_status: number | null;
+  response_body: string | null;
+  state: string;
+  attempts: number;
+  next_retry_at: Date | string | null;
+  error_message: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+};
+
+const mapMerchantNotificationRow = (row: MerchantNotificationRow): MerchantNotification => ({
+  id: row.id,
+  paymentId: row.payment_id,
+  merchantIdentifier: row.merchant_identifier,
+  event: row.event as MerchantNotification['event'],
+  webhookUrl: row.webhook_url,
+  requestPayload: fromJson(row.request_payload) as Record<string, unknown>,
+  responseStatus: row.response_status ?? undefined,
+  responseBody: row.response_body ?? undefined,
+  state: row.state as MerchantNotificationState,
+  attempts: row.attempts,
+  nextRetryAt: row.next_retry_at ? toDate(row.next_retry_at) : undefined,
+  errorMessage: row.error_message ?? undefined,
+  createdAt: toDate(row.created_at),
+  updatedAt: toDate(row.updated_at)
+});
+
+export class MySqlMerchantNotificationRepository implements MerchantNotificationRepository {
+  async create(notification: MerchantNotification): Promise<void> {
+    const pool = await getMySqlPool();
+    await pool.execute(
+      `
+        INSERT INTO merchant_notifications (
+          id, payment_id, merchant_identifier, event, webhook_url,
+          request_payload, response_status, response_body, state,
+          attempts, next_retry_at, error_message, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        notification.id,
+        notification.paymentId,
+        notification.merchantIdentifier,
+        notification.event,
+        notification.webhookUrl,
+        toJson(notification.requestPayload),
+        notification.responseStatus ?? null,
+        notification.responseBody ?? null,
+        notification.state,
+        notification.attempts,
+        notification.nextRetryAt ?? null,
+        notification.errorMessage ?? null,
+        notification.createdAt,
+        notification.updatedAt
+      ]
+    );
+  }
+
+  async update(notification: MerchantNotification): Promise<void> {
+    const pool = await getMySqlPool();
+    await pool.execute(
+      `
+        UPDATE merchant_notifications SET
+          response_status = ?,
+          response_body = ?,
+          state = ?,
+          attempts = ?,
+          next_retry_at = ?,
+          error_message = ?,
+          updated_at = ?
+        WHERE id = ?
+      `,
+      [
+        notification.responseStatus ?? null,
+        notification.responseBody ?? null,
+        notification.state,
+        notification.attempts,
+        notification.nextRetryAt ?? null,
+        notification.errorMessage ?? null,
+        notification.updatedAt,
+        notification.id
+      ]
+    );
+  }
+
+  async listByPaymentId(paymentId: string): Promise<MerchantNotification[]> {
+    const pool = await getMySqlPool();
+    const [rows] = await pool.execute<MerchantNotificationRow[]>(
+      'SELECT * FROM merchant_notifications WHERE payment_id = ? ORDER BY created_at DESC',
+      [paymentId]
+    );
+    return rows.map(mapMerchantNotificationRow);
   }
 }

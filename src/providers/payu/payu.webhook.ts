@@ -76,6 +76,9 @@ export const parsePayuWebhook = (payload: unknown): WebhookEvent | null => {
     providerReference: payUReference,
     status: mapIpnStatus(transactionState, transactionType, resultCode, successful),
     responseHash,
-    rawPayload: payload
+    rawPayload: payload,
+    transactionType,
+    transactionState,
+    resultCode: resultCode ?? undefined
   };
 };

@@ -6,8 +6,6 @@ export interface PayUCredentials {
   safekey: string;
   baseUrl?: string;
   redirectBaseUrl?: string;
-  defaultReturnUrl?: string;
-  defaultCancelUrl?: string;
   defaultNotificationUrl?: string;
   webhookSecret?: string;
 }
