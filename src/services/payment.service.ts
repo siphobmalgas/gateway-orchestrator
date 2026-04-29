@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'crypto';
 import { env } from '../config/env';
-import { PayURedirectPaymentMethod, PayUSetTransactionType, PaymentProviderName, PaymentStatus } from '../domain/enums';
+import { PayURedirectPaymentMethod, PayUSetTransactionType, PayUFlowType, PaymentProviderName, PaymentStatus } from '../domain/enums';
 import { PaymentOperation, PaymentOperationType } from '../domain/payment-operation.entity';
 import { ensureTransition, Payment } from '../domain/payment.entity';
 import { WebhookEventRecord } from '../domain/webhook-event.entity';
@@ -17,6 +17,7 @@ import { ProviderConfigRepository, ProviderCredential } from '../infrastructure/
 import { PaymentRepository } from '../infrastructure/repositories/payment.repository';
 import { WebhookEventRepository } from '../infrastructure/repositories/webhook-event.repository';
 import { RoutingService } from './routing.service';
+import { MerchantNotificationService, ProviderDataContext } from './merchant-notification.service';
 
 type ProviderFailureMetadata = {
   resultCode?: string;
@@ -34,6 +35,7 @@ export interface CreatePaymentInput {
   customerReference?: string;
   paymentMethod?: PayURedirectPaymentMethod;
   transactionType?: PayUSetTransactionType;
+  flowType?: PayUFlowType;
   redirectContext?: RedirectContext;
   metadata?: Record<string, unknown>;
 }
@@ -56,7 +58,8 @@ export class PaymentService {
     private readonly paymentOperationRepository: PaymentOperationRepository,
     private readonly webhookEventRepository: WebhookEventRepository,
     private readonly routingService: RoutingService,
-    private readonly providerConfigRepository: ProviderConfigRepository
+    private readonly providerConfigRepository: ProviderConfigRepository,
+    private readonly merchantNotificationService?: MerchantNotificationService
   ) {}
 
   async createPayment(input: CreatePaymentInput, headers: Record<string, string | string[] | undefined>): Promise<Payment> {
@@ -123,6 +126,7 @@ export class PaymentService {
       customerReference: input.customerReference,
       paymentMethod: input.paymentMethod,
       transactionType: input.transactionType,
+      flowType: input.flowType,
       redirectContext: input.redirectContext,
       metadata: input.metadata
     };
@@ -140,12 +144,22 @@ export class PaymentService {
       try {
         const response = flow === 'payment' ? await provider.payment(requestPayload) : await provider.authorize(requestPayload);
 
+        const previousStatus = payment.status;
         ensureTransition(payment.status, response.status);
         payment.status = response.status;
         payment.providerReference = response.providerReference;
         payment.checkoutUrl = response.redirectUrl;
         payment.updatedAt = new Date();
         await this.paymentRepository.update(payment);
+
+        logger.info('Payment status updated', {
+          paymentId: payment.id,
+          previousStatus,
+          newStatus: payment.status,
+          provider: payment.provider,
+          providerReference: payment.providerReference,
+          operation: flow
+        });
 
         await this.paymentLogRepository.create({
           id: randomUUID(),
@@ -171,6 +185,19 @@ export class PaymentService {
           provider: payment.provider,
           status: payment.status,
           routingRuleId: candidate.ruleId
+        });
+
+        const raw = response.rawResponse as Record<string, unknown> | undefined;
+        const resultObj = raw?.result as Record<string, unknown> | undefined;
+        this.dispatchMerchantNotification(payment, previousStatus, {
+          source: 'provider_response',
+          providerReference: response.providerReference,
+          payuReference: ((resultObj?.effectivePayuReference ?? resultObj?.payuReference ?? response.providerReference) as string) || undefined,
+          transactionType: (raw?.transactionType ?? undefined) as string | undefined,
+          transactionState: (raw?.transactionState ?? undefined) as string | undefined,
+          resultCode: (resultObj?.resultCode ?? undefined) as string | undefined,
+          resultMessage: (resultObj?.resultMessage ?? undefined) as string | undefined,
+          rawResponse: response.rawResponse
         });
 
         return payment;
@@ -324,12 +351,45 @@ export class PaymentService {
     }
 
     if (payment.status !== result.status) {
+      const previousStatus = payment.status;
       ensureTransition(payment.status, result.status);
       payment.status = result.status;
-    }
 
-    payment.updatedAt = new Date();
-    await this.paymentRepository.update(payment);
+      logger.info('Payment status updated via provider lookup', {
+        paymentId: payment.id,
+        previousStatus,
+        newStatus: payment.status,
+        provider: payment.provider,
+        providerReference: payment.providerReference
+      });
+
+      payment.updatedAt = new Date();
+      await this.paymentRepository.update(payment);
+
+      this.dispatchMerchantNotification(payment, previousStatus, {
+        source: 'provider_lookup',
+        providerReference: result.payuReference,
+        payuReference: result.payuReference,
+        transactionType: result.transactionType,
+        transactionState: result.transactionState,
+        resultCode: result.resultCode,
+        resultMessage: result.resultMessage,
+        rawResponse: {
+          payuReference: result.payuReference,
+          merchantReference: result.merchantReference,
+          transactionState: result.transactionState,
+          transactionType: result.transactionType,
+          resultCode: result.resultCode,
+          resultMessage: result.resultMessage,
+          amountInCents: result.amountInCents,
+          currency: result.currency,
+          ...result.rawResponse as Record<string, unknown>
+        }
+      });
+    } else {
+      payment.updatedAt = new Date();
+      await this.paymentRepository.update(payment);
+    }
 
     await this.paymentLogRepository.create({
       id: randomUUID(),
@@ -451,12 +511,20 @@ export class PaymentService {
       }
 
       if (event.status && payment.status !== event.status) {
+        const webhookPreviousStatus = payment.status;
         try {
           ensureTransition(payment.status, event.status);
           payment.status = event.status;
         } catch {
           payment.status = event.status;
         }
+        logger.info('Payment status updated via webhook', {
+          paymentId: payment.id,
+          previousStatus: webhookPreviousStatus,
+          newStatus: payment.status,
+          provider: providerName,
+          providerReference: event.providerReference
+        });
       }
 
       payment.updatedAt = new Date();
@@ -494,6 +562,19 @@ export class PaymentService {
       webhookRecord.state = 'SUCCEEDED';
       webhookRecord.updatedAt = new Date();
       await this.webhookEventRepository.update(webhookRecord);
+
+      if (previousStatus !== payment.status) {
+        this.dispatchMerchantNotification(payment, previousStatus, {
+          source: 'webhook',
+          providerReference: event.providerReference,
+          payuReference: event.providerReference,
+          transactionType: event.transactionType,
+          transactionState: event.transactionState,
+          resultCode: event.resultCode,
+          resultMessage: event.resultMessage,
+          rawResponse: event.rawPayload ?? parsedPayload
+        });
+      }
 
       logger.info('Webhook processed', {
         provider: providerName,
@@ -557,7 +638,18 @@ export class PaymentService {
     }
 
     ensureTransition(payment.status, response.status);
+    const previousStatus = payment.status;
     payment.status = response.status;
+
+    logger.info('Payment status updated', {
+      paymentId: payment.id,
+      previousStatus,
+      newStatus: payment.status,
+      provider: payment.provider,
+      providerReference: payment.providerReference,
+      operation
+    });
+
     return undefined;
   }
 
@@ -648,6 +740,7 @@ export class PaymentService {
 
     try {
       const response = await input.invokeProvider(provider, input.buildProviderRequest(payment));
+      const previousStatus = payment.status;
       const operationName = input.type.toLowerCase() as 'capture' | 'refund' | 'void';
       const failure = this.applyOperationResult(payment, response, operationName);
       payment.updatedAt = new Date();
@@ -674,6 +767,21 @@ export class PaymentService {
 
       if (failure) {
         throw failure;
+      }
+
+      if (previousStatus !== payment.status) {
+        const opRaw = response.rawResponse as Record<string, unknown> | undefined;
+        const opResultObj = opRaw?.result as Record<string, unknown> | undefined;
+        this.dispatchMerchantNotification(payment, previousStatus, {
+          source: 'provider_response',
+          providerReference: response.providerReference,
+          payuReference: ((opResultObj?.effectivePayuReference ?? opResultObj?.payuReference ?? response.providerReference) as string) || undefined,
+          transactionType: (opRaw?.transactionType ?? undefined) as string | undefined,
+          transactionState: (opRaw?.transactionState ?? undefined) as string | undefined,
+          resultCode: (opResultObj?.resultCode ?? undefined) as string | undefined,
+          resultMessage: (opResultObj?.resultMessage ?? undefined) as string | undefined,
+          rawResponse: response.rawResponse
+        });
       }
 
       return payment;
@@ -873,5 +981,18 @@ export class PaymentService {
       displayMessage: typeof details.displayMessage === 'string' ? details.displayMessage : undefined,
       pointOfFailure: typeof details.pointOfFailure === 'string' ? details.pointOfFailure : undefined
     };
+  }
+
+  private dispatchMerchantNotification(payment: Payment, previousStatus: PaymentStatus, providerData?: ProviderDataContext): void {
+    if (!this.merchantNotificationService) {
+      return;
+    }
+    this.merchantNotificationService.notifyStatusChange(payment, previousStatus, providerData).catch((error) => {
+      logger.error('Merchant notification dispatch failed', {
+        paymentId: payment.id,
+        merchantIdentifier: payment.merchantIdentifier,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    });
   }
 }

@@ -17,8 +17,8 @@ const createAuthorizedS2SPayment = async (idempotencyKey: string) =>
       currency: 'ZAR',
       paymentMethod: 'CREDITCARD',
       transactionType: 'RESERVE',
+      flowType: 'SERVER_TO_SERVER',
       metadata: {
-        payuAuthorizeFlow: 'DO_TRANSACTION',
         firstName: 'Sipho',
         lastName: 'Mthembu',
         email: 'sipho@example.com',
@@ -82,9 +82,7 @@ describe('Payments API', () => {
         currency: 'ZAR',
         paymentMethod: 'CREDITCARD',
         transactionType: 'RESERVE',
-        metadata: {
-          payuAuthorizeFlow: 'DO_TRANSACTION'
-        }
+        flowType: 'SERVER_TO_SERVER'
       });
 
     expect(res.status).toBe(400);
@@ -121,8 +119,8 @@ describe('Payments API', () => {
         currency: 'ZAR',
         paymentMethod: 'CREDITCARD',
         transactionType: 'RESERVE',
+        flowType: 'SERVER_TO_SERVER',
         metadata: {
-          payuAuthorizeFlow: 'DO_TRANSACTION',
           secure3d: true,
           firstName: 'Sipho',
           lastName: 'Mthembu',
@@ -473,5 +471,70 @@ describe('Payments API', () => {
 
     expect(payment.status).toBe(200);
     expect(payment.body.status).toBe('VOIDED');
+  });
+
+  it('accepts flowType SERVER_TO_SERVER as an explicit S2S selector', async () => {
+    const res = await request(app)
+      .post('/authorise')
+      .set('idempotency-key', 'idem-flowtype-s2s')
+      .send({
+        provider: 'PAYU',
+        amount: 120,
+        currency: 'ZAR',
+        paymentMethod: 'CREDITCARD',
+        transactionType: 'RESERVE',
+        flowType: 'SERVER_TO_SERVER',
+        metadata: {
+          firstName: 'Sipho',
+          lastName: 'Mthembu',
+          email: 'sipho@example.com',
+          mobile: '27821234567',
+          cardNumber: '4111120000005078',
+          cardExpiry: '122030',
+          cvv: '123',
+          nameOnCard: 'Sipho Mthembu'
+        },
+        redirectContext: merchantRedirectContext
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.status).toBe('AUTHORIZED');
+    expect(res.body.provider).toBe('PAYU');
+  });
+
+  it('accepts flowType REDIRECT as an explicit redirect selector', async () => {
+    const res = await request(app)
+      .post('/authorise')
+      .set('idempotency-key', 'idem-flowtype-redirect')
+      .send({
+        provider: 'PAYU',
+        amount: 120,
+        currency: 'ZAR',
+        paymentMethod: 'CREDITCARD',
+        transactionType: 'RESERVE',
+        flowType: 'REDIRECT',
+        redirectContext: merchantRedirectContext
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.status).toBe('PENDING');
+    expect(res.body.checkoutUrl).toContain('PayUReference=');
+  });
+
+  it('validates S2S card fields when flowType is SERVER_TO_SERVER', async () => {
+    const res = await request(app)
+      .post('/authorise')
+      .set('idempotency-key', 'idem-flowtype-s2s-validation')
+      .send({
+        provider: 'PAYU',
+        amount: 120,
+        currency: 'ZAR',
+        paymentMethod: 'CREDITCARD',
+        transactionType: 'RESERVE',
+        flowType: 'SERVER_TO_SERVER'
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('DO_TRANSACTION requires metadata fields:');
   });
 });

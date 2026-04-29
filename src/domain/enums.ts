@@ -22,6 +22,9 @@ export enum PaymentStatus {
 
 }
 
+export const PAYU_FLOW_TYPES = ['REDIRECT', 'SERVER_TO_SERVER'] as const;
+export type PayUFlowType = (typeof PAYU_FLOW_TYPES)[number];
+
 export const PAYU_REDIRECT_PAYMENT_METHODS = ['OPEN_BANKING', 'CREDITCARD', 'PAYFLEX', 'EFT_PRO', 'MOBICRED'] as const;
 export type PayURedirectPaymentMethod = (typeof PAYU_REDIRECT_PAYMENT_METHODS)[number];
 
@@ -47,3 +50,15 @@ export const PEACH_CARD_BRANDS: readonly PeachPaymentBrand[] = ['VISA', 'MASTER'
 
 export const PEACH_PAYMENT_TYPES = ['DB', 'PA', 'RF', 'CP', 'RV'] as const;
 export type PeachPaymentType = (typeof PEACH_PAYMENT_TYPES)[number];
+
+export const MERCHANT_NOTIFICATION_EVENTS = [
+  'payment.created',
+  'payment.authorized',
+  'payment.captured',
+  'payment.failed',
+  'payment.refunded',
+  'payment.voided',
+  'payment.pending',
+  'payment.updated'
+] as const;
+export type MerchantNotificationEvent = (typeof MERCHANT_NOTIFICATION_EVENTS)[number];

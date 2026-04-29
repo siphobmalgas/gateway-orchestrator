@@ -16,6 +16,7 @@ import { webhookRoutes } from './routes/webhook.routes';
 import { PaymentService } from './services/payment.service';
 import {
   InMemoryMerchantRepository,
+  InMemoryMerchantNotificationRepository,
   InMemoryPaymentLogRepository,
   InMemoryPaymentOperationRepository,
   InMemoryPaymentRepository,
@@ -31,6 +32,8 @@ import {
   MongoWebhookEventRepository
 } from './infrastructure/repositories/mongo.repositories';
 import {
+  MySqlMerchantRepository,
+  MySqlMerchantNotificationRepository,
   MySqlPaymentLogRepository,
   MySqlPaymentOperationRepository,
   MySqlPaymentRepository,
@@ -41,6 +44,9 @@ import { merchantRoutes } from './routes/merchant.routes';
 import { providerRoutes } from './routes/provider.routes';
 import { OnboardingService } from './services/onboarding.service';
 import { RoutingService } from './services/routing.service';
+import { MerchantNotificationService } from './services/merchant-notification.service';
+import { PaymentPollerService } from './services/payment-poller.service';
+import { DEFAULT_PAYMENT_POLLING_CONFIG } from './utils/payment-polling';
 import { env } from './config/env';
 import { logger } from './infrastructure/logger';
 
@@ -71,7 +77,14 @@ const webhookEventRepository = useMySqlPersistence
     ? new MongoWebhookEventRepository()
     : new InMemoryWebhookEventRepository();
 const providerConfigRepository = useMongoPersistence ? new MongoProviderConfigRepository() : new InMemoryProviderConfigRepository();
-const merchantRepository = useMongoPersistence ? new MongoMerchantRepository() : new InMemoryMerchantRepository();
+const merchantRepository = useMySqlPersistence
+  ? new MySqlMerchantRepository()
+  : useMongoPersistence
+    ? new MongoMerchantRepository()
+    : new InMemoryMerchantRepository();
+const merchantNotificationRepository = useMySqlPersistence
+  ? new MySqlMerchantNotificationRepository()
+  : new InMemoryMerchantNotificationRepository();
 
 if (useMongoPersistence) {
   logger.info(useMySqlPersistence ? 'Mongo configuration persistence enabled' : 'Mongo persistence enabled', {
@@ -87,6 +100,7 @@ if (useMySqlPersistence) {
 
 export const onboardingService = new OnboardingService(providerConfigRepository, merchantRepository);
 const routingService = new RoutingService(providerConfigRepository, merchantRepository);
+const merchantNotificationService = new MerchantNotificationService(merchantRepository, merchantNotificationRepository);
 const paymentService = new PaymentService(
   providers,
   paymentRepository,
@@ -94,7 +108,8 @@ const paymentService = new PaymentService(
   paymentOperationRepository,
   webhookEventRepository,
   routingService,
-  providerConfigRepository
+  providerConfigRepository,
+  merchantNotificationService
 );
 
 const paymentController = new PaymentController(paymentService);
@@ -120,3 +135,14 @@ app.use(routingRoutes(routingController));
 app.use(healthRoutes(healthController));
 
 app.use(errorHandler);
+
+export const paymentPoller = new PaymentPollerService(
+  paymentService,
+  paymentRepository,
+  {
+    enabled: env.polling.enabled,
+    intervalMs: env.polling.intervalMs,
+    batchSize: env.polling.batchSize,
+    pollingConfig: DEFAULT_PAYMENT_POLLING_CONFIG
+  }
+);

@@ -1,9 +1,12 @@
+import { PaymentStatus } from '../../domain/enums';
 import { Payment } from '../../domain/payment.entity';
 import { PaymentOperation } from '../../domain/payment-operation.entity';
 import { WebhookEventRecord } from '../../domain/webhook-event.entity';
 import { Merchant } from '../../domain/merchant.entity';
+import { MerchantNotification } from '../../domain/merchant-notification.entity';
 import { PaymentLog, PaymentLogRepository } from './payment-log.repository';
 import { MerchantRepository } from './merchant.repository';
+import { MerchantNotificationRepository } from './merchant-notification.repository';
 import { PaymentOperationRepository } from './payment-operation.repository';
 import { PaymentRepository } from './payment.repository';
 import { ProviderConfigRepository, ProviderCredential, RoutingRule } from './provider-config.repository';
@@ -27,6 +30,11 @@ export class InMemoryPaymentRepository implements PaymentRepository {
       }
     }
     return null;
+  }
+
+  async findByStatuses(statuses: PaymentStatus[]): Promise<Payment[]> {
+    const statusSet = new Set(statuses);
+    return Array.from(this.store.values()).filter((p) => statusSet.has(p.status as PaymentStatus));
   }
 
   async listAll(): Promise<Payment[]> {
@@ -145,7 +153,32 @@ export class InMemoryMerchantRepository implements MerchantRepository {
     this.merchants.set(merchant.merchantIdentifier, merchant);
   }
 
+  async update(merchant: Merchant): Promise<void> {
+    this.merchants.set(merchant.merchantIdentifier, merchant);
+  }
+
   async findByMerchantIdentifier(merchantIdentifier: string): Promise<Merchant | null> {
     return this.merchants.get(merchantIdentifier) ?? null;
+  }
+}
+
+export class InMemoryMerchantNotificationRepository implements MerchantNotificationRepository {
+  private readonly notifications: MerchantNotification[] = [];
+
+  async create(notification: MerchantNotification): Promise<void> {
+    this.notifications.push(notification);
+  }
+
+  async update(notification: MerchantNotification): Promise<void> {
+    const index = this.notifications.findIndex((n) => n.id === notification.id);
+    if (index >= 0) {
+      this.notifications[index] = notification;
+    }
+  }
+
+  async listByPaymentId(paymentId: string): Promise<MerchantNotification[]> {
+    return this.notifications
+      .filter((n) => n.paymentId === paymentId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 }

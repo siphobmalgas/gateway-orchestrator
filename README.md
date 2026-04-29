@@ -162,7 +162,8 @@ Use `inlineRedirect.url` as the iframe `src`. If iframe rendering is blocked in 
 
 ## PayU Server-to-Server Operations
 
-- `POST /authorise` with `metadata.payuAuthorizeFlow=DO_TRANSACTION` performs a PayU `RESERVE` S2S authorize for `CREDITCARD`.
+- `POST /authorise` with `flowType: "SERVER_TO_SERVER"` performs a PayU `RESERVE` S2S authorize via doTransaction.
+- `POST /authorise` with `flowType: "REDIRECT"` (or omitted) uses the RPP redirect flow via setTransaction.
 - `redirectContext.returnUrl` and `redirectContext.cancelUrl` are accepted on S2S authorize requests as merchant-owned redirect targets.
 - When `metadata.secure3d=true`, `redirectContext.returnUrl` and `redirectContext.cancelUrl` are required because PayU can return the shopper through a 3DS redirect.
 - `POST /payments/:id/capture` performs PayU `FINALIZE`.

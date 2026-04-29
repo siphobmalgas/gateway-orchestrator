@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PaymentProviderName, PAYU_REDIRECT_PAYMENT_METHODS, PAYU_SET_TRANSACTION_TYPES, PEACH_PAYMENT_BRANDS, PEACH_PAYMENT_TYPES } from '../domain/enums';
+import { PaymentProviderName, PAYU_FLOW_TYPES, PAYU_REDIRECT_PAYMENT_METHODS, PAYU_SET_TRANSACTION_TYPES, PEACH_PAYMENT_BRANDS, PEACH_PAYMENT_TYPES } from '../domain/enums';
 
 const paymentMethodSchema = z.union([
   z.enum(PAYU_REDIRECT_PAYMENT_METHODS),
@@ -9,6 +9,7 @@ const transactionTypeSchema = z.union([
   z.enum(PAYU_SET_TRANSACTION_TYPES),
   z.enum(PEACH_PAYMENT_TYPES)
 ]);
+const payuFlowTypeSchema = z.enum(PAYU_FLOW_TYPES);
 const redirectChannelSchema = z.enum(['web', 'responsive', 'mobi']);
 const paymentMetadataSchema = z.record(z.unknown());
 
@@ -57,12 +58,9 @@ const readMetadataBoolean = (metadata: Record<string, unknown> | undefined, key:
 };
 
 const isPayuS2SDoTransactionFlow = (value: {
-  paymentMethod?: string;
-  transactionType?: string;
-  metadata?: Record<string, unknown>;
+  flowType?: string;
 }): boolean => {
-  const flowSelector = typeof value.metadata?.payuAuthorizeFlow === 'string' ? value.metadata.payuAuthorizeFlow.toUpperCase() : '';
-  return value.paymentMethod === 'CREDITCARD' && value.transactionType === 'RESERVE' && flowSelector === 'DO_TRANSACTION';
+  return value.flowType === 'SERVER_TO_SERVER';
 };
 
 export const createPaymentSchema = z
@@ -74,6 +72,7 @@ export const createPaymentSchema = z
     customerReference: z.string().optional(),
     paymentMethod: paymentMethodSchema.optional(),
     transactionType: transactionTypeSchema.optional(),
+    flowType: payuFlowTypeSchema.optional(),
     redirectContext: z
       .object({
         returnUrl: z.string().url().optional(),
@@ -179,8 +178,6 @@ const payuCredentialsSchema = z.object({
   safekey: z.string().min(1),
   baseUrl: z.string().url().optional(),
   redirectBaseUrl: z.string().url().optional(),
-  defaultReturnUrl: z.string().url().optional(),
-  defaultCancelUrl: z.string().url().optional(),
   defaultNotificationUrl: z.string().url().optional(),
   webhookSecret: z.string().min(1).optional()
 });
@@ -253,7 +250,12 @@ export const registerProviderSchema = z
 export const createMerchantSchema = z.object({
   merchantIdentifier: z.string().min(1),
   merchantName: z.string().min(1),
+  webhookUrl: z.string().url().optional(),
   metadata: paymentMetadataSchema.optional()
+});
+
+export const updateMerchantWebhookSchema = z.object({
+  webhookUrl: z.string().url().nullable()
 });
 
 export const createRoutingRuleSchema = z.object({

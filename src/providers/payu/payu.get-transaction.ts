@@ -2,6 +2,7 @@ import { env } from '../../config/env';
 import { PaymentStatus } from '../../domain/enums';
 import { LookupTransactionRequest, LookupTransactionResult } from '../../domain/provider.interface';
 import { requestWithRetry } from '../../infrastructure/http.client';
+import { logger } from '../../infrastructure/logger';
 import { PayURuntimeConfig } from '../provider-runtime-config';
 import { escapeXml, readTag } from './payu.xml';
 
@@ -95,6 +96,13 @@ export const getTransaction = async (input: GetTransactionInput): Promise<Lookup
   </SOAP-ENV:Body>
 </SOAP-ENV:Envelope>`;
 
+  logger.info('PayU getTransaction SOAP request', {
+    payuReference: input.payuReference,
+    merchantReference: input.merchantReference,
+    endpoint: input.config.baseUrl,
+    soapAction: 'getTransaction'
+  });
+
   const soapResponse = await requestWithRetry<string>({
     method: 'POST',
     url: input.config.baseUrl,
@@ -117,12 +125,28 @@ export const getTransaction = async (input: GetTransactionInput): Promise<Lookup
   const amountInCents = parseInt(readTag(soapResponse, 'amountInCents') ?? '0', 10);
   const currency = readTag(soapResponse, 'currencyCode') ?? 'ZAR';
 
+  const status = mapTransactionState(transactionState, transactionType);
+
+  logger.info('PayU getTransaction SOAP response', {
+    payuReference,
+    merchantReference,
+    transactionState,
+    transactionType,
+    status,
+    resultCode,
+    resultMessage,
+    amountInCents,
+    currency,
+    requestTrace,
+    currentPayUReference: currentPayuReference || undefined
+  });
+
   return {
     payuReference,
     merchantReference,
     transactionState,
     transactionType,
-    status: mapTransactionState(transactionState, transactionType),
+    status,
     amountInCents,
     currency,
     resultCode,

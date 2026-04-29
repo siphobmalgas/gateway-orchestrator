@@ -1,5 +1,6 @@
 import { PayURedirectPaymentMethod, PayUSetTransactionType } from '../../domain/enums';
 import { AuthorizeRequest, PaymentRequest } from '../../domain/provider.interface';
+import { logger } from '../../infrastructure/logger';
 import { PayURuntimeConfig } from '../provider-runtime-config';
 import { createPaymentSetTransaction, createReserveSetTransaction } from './payu.set-transaction';
 
@@ -15,8 +16,24 @@ export const runPayuPaymentFlow = async (
   request: PaymentRequest,
   method: PayURedirectPaymentMethod
 ): Promise<PayuRedirectFlowResult> => {
+  logger.info('PayU payment flow started', {
+    paymentId: request.paymentId,
+    amount: request.amount,
+    currency: request.currency,
+    paymentMethod: method,
+    flow: 'PAYMENT'
+  });
+
   const providerReference = await createPaymentSetTransaction(config, request, method);
   const redirectUrl = `${config.rppRedirectBaseUrl}?PayUReference=${encodeURIComponent(providerReference)}`;
+
+  logger.info('PayU payment flow completed', {
+    paymentId: request.paymentId,
+    providerReference,
+    redirectUrl,
+    paymentMethod: method,
+    flow: 'PAYMENT'
+  });
 
   return {
     providerReference,
@@ -32,8 +49,26 @@ export const runPayuReserveFlow = async (
   method: PayURedirectPaymentMethod,
   transactionType: PayUSetTransactionType
 ): Promise<PayuRedirectFlowResult> => {
+  logger.info('PayU reserve flow started', {
+    paymentId: request.paymentId,
+    amount: request.amount,
+    currency: request.currency,
+    paymentMethod: method,
+    transactionType,
+    flow: 'REDIRECT'
+  });
+
   const providerReference = await createReserveSetTransaction(config, request, method, transactionType);
   const redirectUrl = `${config.rppRedirectBaseUrl}?PayUReference=${encodeURIComponent(providerReference)}`;
+
+  logger.info('PayU reserve flow completed', {
+    paymentId: request.paymentId,
+    providerReference,
+    redirectUrl,
+    paymentMethod: method,
+    transactionType,
+    flow: 'REDIRECT'
+  });
 
   return {
     providerReference,

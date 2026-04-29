@@ -16,8 +16,6 @@ const payuConfig = {
   soapPassword: 'WSAUFbw6',
   safekey: '{07F70723-1B96-4B97-B891-7BF708594EEA}',
   rppRedirectBaseUrl: 'https://staging.payu.example/rpp.do',
-  defaultReturnUrl: 'https://merchant.example.com/payu/return',
-  defaultCancelUrl: 'https://merchant.example.com/payu/cancel',
   defaultNotificationUrl: 'https://merchant.example.com/webhooks/payu'
 };
 

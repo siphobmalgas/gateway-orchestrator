@@ -25,6 +25,7 @@ export interface RegisterProviderInput {
 export interface CreateMerchantInput {
   merchantIdentifier: string;
   merchantName: string;
+  webhookUrl?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -111,12 +112,29 @@ export class OnboardingService {
       id: randomUUID(),
       merchantIdentifier: input.merchantIdentifier,
       merchantName: input.merchantName,
+      webhookUrl: input.webhookUrl,
       metadata: input.metadata,
       createdAt: new Date(),
       updatedAt: new Date()
     };
 
     await this.merchantRepository.create(merchant);
+    return merchant;
+  }
+
+  async getMerchant(merchantIdentifier: string): Promise<Merchant | null> {
+    return this.merchantRepository.findByMerchantIdentifier(merchantIdentifier);
+  }
+
+  async updateMerchantWebhookUrl(merchantIdentifier: string, webhookUrl: string | null): Promise<Merchant> {
+    const merchant = await this.merchantRepository.findByMerchantIdentifier(merchantIdentifier);
+    if (!merchant) {
+      throw new Error(`Merchant not found: ${merchantIdentifier}`);
+    }
+
+    merchant.webhookUrl = webhookUrl ?? undefined;
+    merchant.updatedAt = new Date();
+    await this.merchantRepository.update(merchant);
     return merchant;
   }
 
