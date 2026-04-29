@@ -1,6 +1,12 @@
 import request from 'supertest';
 import { app } from '../../src/app';
 
+const merchantRedirectContext = {
+  returnUrl: 'https://merchant.example.com/payments/return',
+  cancelUrl: 'https://merchant.example.com/payments/cancel',
+  notificationUrl: 'https://merchant.example.com/webhooks/payu'
+};
+
 const createAuthorizedS2SPayment = async (idempotencyKey: string) =>
   request(app)
     .post('/authorise')
@@ -21,7 +27,8 @@ const createAuthorizedS2SPayment = async (idempotencyKey: string) =>
         cardExpiry: '122030',
         cvv: '123',
         nameOnCard: 'Sipho Mthembu'
-      }
+      },
+      redirectContext: merchantRedirectContext
     });
 
 describe('Payments API', () => {
@@ -88,6 +95,52 @@ describe('Payments API', () => {
     expect(res.body.error).toContain('nameOnCard');
   });
 
+  it('rejects PayU redirect requests without merchant return and cancel URLs', async () => {
+    const res = await request(app)
+      .post('/payments')
+      .set('idempotency-key', 'idem-missing-merchant-redirect-urls')
+      .send({
+        provider: 'PAYU',
+        amount: 120,
+        currency: 'ZAR'
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('PAYU redirect flows require redirectContext fields:');
+    expect(res.body.error).toContain('returnUrl');
+    expect(res.body.error).toContain('cancelUrl');
+  });
+
+  it('rejects secure3d S2S doTransaction requests without merchant return and cancel URLs', async () => {
+    const res = await request(app)
+      .post('/authorise')
+      .set('idempotency-key', 'idem-s2s-secure3d-missing-redirect-urls')
+      .send({
+        provider: 'PAYU',
+        amount: 120,
+        currency: 'ZAR',
+        paymentMethod: 'CREDITCARD',
+        transactionType: 'RESERVE',
+        metadata: {
+          payuAuthorizeFlow: 'DO_TRANSACTION',
+          secure3d: true,
+          firstName: 'Sipho',
+          lastName: 'Mthembu',
+          email: 'sipho@example.com',
+          mobile: '27821234567',
+          cardNumber: '4111120000005078',
+          cardExpiry: '122030',
+          cvv: '123',
+          nameOnCard: 'Sipho Mthembu'
+        }
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('DO_TRANSACTION secure3d requires redirectContext fields:');
+    expect(res.body.error).toContain('returnUrl');
+    expect(res.body.error).toContain('cancelUrl');
+  });
+
   it('supports /authorise endpoint', async () => {
     const res = await request(app)
       .post('/authorise')
@@ -96,7 +149,8 @@ describe('Payments API', () => {
         provider: 'PAYU',
         amount: 220,
         currency: 'ZAR',
-        paymentMethod: 'MOBICRED'
+        paymentMethod: 'MOBICRED',
+        redirectContext: merchantRedirectContext
       });
 
     expect(res.status).toBe(201);
@@ -117,7 +171,8 @@ describe('Payments API', () => {
         provider: 'PAYU',
         amount: 220,
         currency: 'ZAR',
-        paymentMethod: 'MOBICRED'
+        paymentMethod: 'MOBICRED',
+        redirectContext: merchantRedirectContext
       });
 
     expect(res.status).toBe(201);
@@ -138,7 +193,8 @@ describe('Payments API', () => {
       .send({
         provider: 'PAYU',
         amount: 155.5,
-        currency: 'zar'
+        currency: 'zar',
+        redirectContext: merchantRedirectContext
       });
 
     expect(res.status).toBe(201);
@@ -160,7 +216,8 @@ describe('Payments API', () => {
       .send({
         provider: 'PAYU',
         amount: 99,
-        currency: 'ZAR'
+        currency: 'ZAR',
+        redirectContext: merchantRedirectContext
       });
 
     const second = await request(app)
@@ -169,12 +226,39 @@ describe('Payments API', () => {
       .send({
         provider: 'PAYU',
         amount: 99,
-        currency: 'ZAR'
+        currency: 'ZAR',
+        redirectContext: merchantRedirectContext
       });
 
     expect(first.status).toBe(201);
     expect(second.status).toBe(201);
     expect(first.body.id).toBe(second.body.id);
+  });
+
+  it('returns 409 when the same idempotency key is reused with a different create body', async () => {
+    const first = await request(app)
+      .post('/payments')
+      .set('idempotency-key', 'idem-repeat-conflict')
+      .send({
+        provider: 'PAYU',
+        amount: 99,
+        currency: 'ZAR',
+        redirectContext: merchantRedirectContext
+      });
+
+    const second = await request(app)
+      .post('/payments')
+      .set('idempotency-key', 'idem-repeat-conflict')
+      .send({
+        provider: 'PAYU',
+        amount: 149,
+        currency: 'ZAR',
+        redirectContext: merchantRedirectContext
+      });
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(409);
+    expect(second.body.code).toBe('IDEMPOTENCY_KEY_CONFLICT');
   });
 
   it('supports PAYFLEX as a standalone provider', async () => {
@@ -213,7 +297,8 @@ describe('Payments API', () => {
         provider: 'PAYU',
         amount: 120,
         currency: 'ZAR',
-        transactionType: 'PAYMENT'
+        transactionType: 'PAYMENT',
+        redirectContext: merchantRedirectContext
       });
 
     expect(created.status).toBe(201);
@@ -243,6 +328,51 @@ describe('Payments API', () => {
     expect(payment.body.status).toBe('CAPTURED');
   });
 
+  it('does not reconcile duplicate payu ipn deliveries twice', async () => {
+    const created = await request(app)
+      .post('/payments')
+      .set('idempotency-key', 'idem-ipn-dedupe')
+      .send({
+        provider: 'PAYU',
+        amount: 120,
+        currency: 'ZAR',
+        transactionType: 'PAYMENT',
+        redirectContext: merchantRedirectContext
+      });
+
+    expect(created.status).toBe(201);
+
+    const ipnPayload = `<?xml version="1.0" encoding="UTF-8"?>
+<PaymentNotification>
+  <MerchantReference>${created.body.id}</MerchantReference>
+  <TransactionType>PAYMENT</TransactionType>
+  <TransactionState>SUCCESSFUL</TransactionState>
+  <PayUReference>${created.body.providerReference}</PayUReference>
+  <IpnExtraInfo>
+    <ResponseHash>ipn-dedupe-${created.body.id}</ResponseHash>
+  </IpnExtraInfo>
+</PaymentNotification>`;
+
+    const firstWebhook = await request(app)
+      .post('/webhooks/payu')
+      .set('content-type', 'text/xml')
+      .send(ipnPayload);
+
+    const secondWebhook = await request(app)
+      .post('/webhooks/payu')
+      .set('content-type', 'text/xml')
+      .send(ipnPayload);
+
+    expect(firstWebhook.status).toBe(200);
+    expect(secondWebhook.status).toBe(200);
+
+    const logs = await request(app).get(`/transactions/${created.body.id}/logs`);
+    const webhookLogs = logs.body.filter((entry: { request?: { operation?: string } }) => entry.request?.operation === 'webhook');
+
+    expect(logs.status).toBe(200);
+    expect(webhookLogs).toHaveLength(1);
+  });
+
   it('persists provider-status lookup results to the payment record', async () => {
     const created = await request(app)
       .post('/payments')
@@ -251,7 +381,8 @@ describe('Payments API', () => {
         provider: 'PAYU',
         amount: 120,
         currency: 'ZAR',
-        transactionType: 'PAYMENT'
+        transactionType: 'PAYMENT',
+        redirectContext: merchantRedirectContext
       });
 
     expect(created.status).toBe(201);

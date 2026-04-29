@@ -2,11 +2,16 @@ import { randomUUID } from 'crypto';
 import { env } from '../../config/env';
 import { PaymentProviderName, PaymentStatus } from '../../domain/enums';
 import { AuthorizeRequest, CaptureRequest, PaymentRequest, PaymentResponse, RefundRequest, VoidRequest } from '../../domain/provider.interface';
+import { ApiKeyProviderRuntimeConfig } from '../provider-runtime-config';
 import { BaseProvider } from '../shared/base.provider';
 
 export class StitchProvider extends BaseProvider {
-  constructor() {
-    super(PaymentProviderName.STITCH, env.stitch.baseUrl, env.stitch.apiKey, env.stitch.webhookSecret);
+  constructor(config: ApiKeyProviderRuntimeConfig = {
+    baseUrl: env.stitch.baseUrl,
+    apiKey: env.stitch.apiKey,
+    webhookSecret: env.stitch.webhookSecret
+  }) {
+    super(PaymentProviderName.STITCH, config.baseUrl, config.apiKey, config.webhookSecret);
   }
 
   async payment(request: PaymentRequest): Promise<PaymentResponse> {

@@ -2,11 +2,16 @@ import { randomUUID } from 'crypto';
 import { env } from '../../config/env';
 import { PaymentProviderName, PaymentStatus } from '../../domain/enums';
 import { AuthorizeRequest, CaptureRequest, PaymentRequest, PaymentResponse, RefundRequest, VoidRequest } from '../../domain/provider.interface';
+import { ApiKeyProviderRuntimeConfig } from '../provider-runtime-config';
 import { BaseProvider } from '../shared/base.provider';
 
 export class PayFastProvider extends BaseProvider {
-  constructor() {
-    super(PaymentProviderName.PAYFAST, env.payfast.baseUrl, env.payfast.apiKey, env.payfast.webhookSecret);
+  constructor(config: ApiKeyProviderRuntimeConfig = {
+    baseUrl: env.payfast.baseUrl,
+    apiKey: env.payfast.apiKey,
+    webhookSecret: env.payfast.webhookSecret
+  }) {
+    super(PaymentProviderName.PAYFAST, config.baseUrl, config.apiKey, config.webhookSecret);
   }
 
   async payment(request: PaymentRequest): Promise<PaymentResponse> {

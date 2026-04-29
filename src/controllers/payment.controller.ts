@@ -24,7 +24,7 @@ type InlineRedirect = {
   fallbackUrl: string;
 };
 
-type PaymentResponsePayload = Payment & {
+type PaymentResponsePayload = Omit<Payment, 'initialRequestHash'> & {
   redirectLink?: string;
   redirectUrl?: string;
   inlineRedirect?: InlineRedirect;
@@ -43,12 +43,16 @@ const toInlineRedirect = (payment: Payment): InlineRedirect | undefined => {
   };
 };
 
-const toPaymentResponse = (payment: Payment): PaymentResponsePayload => ({
-  ...payment,
-  redirectLink: payment.checkoutUrl,
-  redirectUrl: payment.checkoutUrl,
-  inlineRedirect: toInlineRedirect(payment)
-});
+const toPaymentResponse = (payment: Payment): PaymentResponsePayload => {
+  const { initialRequestHash: _initialRequestHash, ...publicPayment } = payment;
+
+  return {
+    ...publicPayment,
+    redirectLink: payment.checkoutUrl,
+    redirectUrl: payment.checkoutUrl,
+    inlineRedirect: toInlineRedirect(payment)
+  };
+};
 
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
@@ -112,7 +116,7 @@ export class PaymentController {
 
   getById = async (req: Request, res: Response): Promise<void> => {
     const paymentId = requireStringParam(req.params.id, 'id');
-    const payment = await this.paymentService.getPayment(paymentId, extractHeaders(req.headers));
+    const payment = await this.paymentService.getPayment(paymentId);
     if (!payment) {
       res.status(404).json({ error: 'Payment not found' });
       return;
@@ -122,7 +126,7 @@ export class PaymentController {
   };
 
   listTransactions = async (req: Request, res: Response): Promise<void> => {
-    const payments = await this.paymentService.listTransactions(extractHeaders(req.headers));
+    const payments = await this.paymentService.listTransactions();
     res.status(200).json(payments.map((payment) => toPaymentResponse(payment)));
   };
 
@@ -130,6 +134,12 @@ export class PaymentController {
     const paymentId = requireStringParam(req.params.id, 'id');
     const logs = await this.paymentService.listTransactionLogs(paymentId);
     res.status(200).json(logs);
+  };
+
+  listWebhookEvents = async (req: Request, res: Response): Promise<void> => {
+    const paymentId = requireStringParam(req.params.id, 'id');
+    const webhookEvents = await this.paymentService.listWebhookEvents(paymentId);
+    res.status(200).json(webhookEvents);
   };
 
   lookupProviderStatus = async (req: Request, res: Response): Promise<void> => {

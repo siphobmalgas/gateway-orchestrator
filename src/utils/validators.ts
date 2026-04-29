@@ -34,9 +34,41 @@ const getMissingS2SCardFields = (metadata: Record<string, unknown> | undefined):
   });
 };
 
+const getMissingRedirectFields = (
+  redirectContext: { returnUrl?: string; cancelUrl?: string } | undefined,
+  requiredFields: ReadonlyArray<'returnUrl' | 'cancelUrl'>
+): string[] =>
+  requiredFields.filter((field) => {
+    const value = redirectContext?.[field];
+    return typeof value !== 'string' || value.trim().length === 0;
+  });
+
+const readMetadataBoolean = (metadata: Record<string, unknown> | undefined, key: string): boolean => {
+  const value = metadata?.[key];
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    return value.trim().toLowerCase() === 'true';
+  }
+
+  return false;
+};
+
+const isPayuS2SDoTransactionFlow = (value: {
+  paymentMethod?: string;
+  transactionType?: string;
+  metadata?: Record<string, unknown>;
+}): boolean => {
+  const flowSelector = typeof value.metadata?.payuAuthorizeFlow === 'string' ? value.metadata.payuAuthorizeFlow.toUpperCase() : '';
+  return value.paymentMethod === 'CREDITCARD' && value.transactionType === 'RESERVE' && flowSelector === 'DO_TRANSACTION';
+};
+
 export const createPaymentSchema = z
   .object({
-    provider: z.nativeEnum(PaymentProviderName),
+    provider: z.nativeEnum(PaymentProviderName).optional(),
+    merchantIdentifier: z.string().min(1).optional(),
     amount: z.number().positive(),
     currency: z.string().min(3).max(3).transform((value) => value.toUpperCase()),
     customerReference: z.string().optional(),
@@ -53,6 +85,14 @@ export const createPaymentSchema = z
     metadata: paymentMetadataSchema.optional()
   })
   .superRefine((value, context) => {
+    if (!value.provider && !value.merchantIdentifier) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['provider'],
+        message: 'provider is required unless merchantIdentifier is provided for routed payments'
+      });
+    }
+
     if (value.paymentMethod === 'PAYFLEX') {
       const missingFields = getMissingPayflexFields(value.metadata);
       if (missingFields.length > 0) {
@@ -95,19 +135,35 @@ export const createPaymentSchema = z
       }
     }
 
-    const flowSelector = typeof value.metadata?.payuAuthorizeFlow === 'string' ? value.metadata.payuAuthorizeFlow.toUpperCase() : '';
-    const shouldValidateS2S = value.paymentMethod === 'CREDITCARD' && value.transactionType === 'RESERVE' && flowSelector === 'DO_TRANSACTION';
+    const shouldValidateS2S = isPayuS2SDoTransactionFlow(value);
 
-    if (!shouldValidateS2S) {
+    if (shouldValidateS2S) {
+      const missingS2SFields = getMissingS2SCardFields(value.metadata);
+      if (missingS2SFields.length > 0) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['metadata'],
+          message: `DO_TRANSACTION requires metadata fields: ${missingS2SFields.join(', ')}`
+        });
+      }
+    }
+
+    const requiresMerchantRedirectUrls = shouldValidateS2S
+      ? readMetadataBoolean(value.metadata, 'secure3d')
+      : value.provider === PaymentProviderName.PAYU || value.paymentMethod !== undefined;
+
+    if (!requiresMerchantRedirectUrls) {
       return;
     }
 
-    const missingS2SFields = getMissingS2SCardFields(value.metadata);
-    if (missingS2SFields.length > 0) {
+    const missingRedirectFields = getMissingRedirectFields(value.redirectContext, ['returnUrl', 'cancelUrl']);
+    if (missingRedirectFields.length > 0) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['metadata'],
-        message: `DO_TRANSACTION requires metadata fields: ${missingS2SFields.join(', ')}`
+        path: ['redirectContext'],
+        message: shouldValidateS2S
+          ? `DO_TRANSACTION secure3d requires redirectContext fields: ${missingRedirectFields.join(', ')}`
+          : `PAYU redirect flows require redirectContext fields: ${missingRedirectFields.join(', ')}`
       });
     }
   });
@@ -120,7 +176,29 @@ export const refundSchema = z.object({
 const payuCredentialsSchema = z.object({
   username: z.string().min(1),
   password: z.string().min(1),
-  safekey: z.string().min(1)
+  safekey: z.string().min(1),
+  baseUrl: z.string().url().optional(),
+  redirectBaseUrl: z.string().url().optional(),
+  defaultReturnUrl: z.string().url().optional(),
+  defaultCancelUrl: z.string().url().optional(),
+  defaultNotificationUrl: z.string().url().optional(),
+  webhookSecret: z.string().min(1).optional()
+});
+
+const payflexCredentialsSchema = z.object({
+  clientId: z.string().min(1),
+  clientSecret: z.string().min(1),
+  authUrl: z.string().url().optional(),
+  audience: z.string().min(1).optional(),
+  baseUrl: z.string().url().optional(),
+  apiKey: z.string().min(1).optional(),
+  webhookSecret: z.string().min(1).optional()
+});
+
+const apiKeyCredentialsSchema = z.object({
+  apiKey: z.string().min(1),
+  baseUrl: z.string().url().optional(),
+  webhookSecret: z.string().min(1).optional()
 });
 
 export const registerProviderSchema = z
@@ -129,6 +207,10 @@ export const registerProviderSchema = z
     merchantIdentifier: z.string().min(1),
     merchantName: z.string().min(1),
     payuCredentials: payuCredentialsSchema.optional(),
+    payflexCredentials: payflexCredentialsSchema.optional(),
+    payfastCredentials: apiKeyCredentialsSchema.optional(),
+    stitchCredentials: apiKeyCredentialsSchema.optional(),
+    peachCredentials: apiKeyCredentialsSchema.optional(),
     metadata: paymentMetadataSchema.optional()
   })
   .superRefine((value, context) => {
@@ -138,10 +220,51 @@ export const registerProviderSchema = z
         message: 'payuCredentials is required for PAYU provider'
       });
     }
+
+    if (value.provider === PaymentProviderName.PAYFLEX && !value.payflexCredentials) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'payflexCredentials is required for PAYFLEX provider'
+      });
+    }
+
+    if (value.provider === PaymentProviderName.PAYFAST && !value.payfastCredentials) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'payfastCredentials is required for PAYFAST provider'
+      });
+    }
+
+    if (value.provider === PaymentProviderName.STITCH && !value.stitchCredentials) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'stitchCredentials is required for STITCH provider'
+      });
+    }
+
+    if (value.provider === PaymentProviderName.PEACH && !value.peachCredentials) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'peachCredentials is required for PEACH provider'
+      });
+    }
   });
 
 export const createMerchantSchema = z.object({
   merchantIdentifier: z.string().min(1),
   merchantName: z.string().min(1),
+  metadata: paymentMetadataSchema.optional()
+});
+
+export const createRoutingRuleSchema = z.object({
+  id: z.string().uuid().optional(),
+  merchantIdentifier: z.string().min(1),
+  routeToProvider: z.nativeEnum(PaymentProviderName),
+  priority: z.number().int().min(0),
+  paymentMethod: z.string().min(1).transform((value) => value.toUpperCase()).optional(),
+  currency: z.string().min(3).max(3).transform((value) => value.toUpperCase()).optional(),
+  country: z.string().min(2).max(2).transform((value) => value.toUpperCase()).optional(),
+  enabled: z.boolean().default(true),
+  weight: z.number().positive().optional(),
   metadata: paymentMetadataSchema.optional()
 });

@@ -2,6 +2,7 @@ import { env } from '../../config/env';
 import { PaymentProviderName, PaymentStatus, PayURedirectPaymentMethod, PayUSetTransactionType } from '../../domain/enums';
 import { AuthorizeRequest, CaptureRequest, LookupTransactionRequest, LookupTransactionResult, PaymentRequest, PaymentResponse, RefundRequest, VoidRequest, WebhookEvent } from '../../domain/provider.interface';
 import { BaseProvider } from '../shared/base.provider';
+import { PayURuntimeConfig } from '../provider-runtime-config';
 import { runCreditDoTransaction, runFinalizeDoTransaction, runReserveCancelDoTransaction, runReserveDoTransaction } from './payu.do-transaction';
 import { getTransaction } from './payu.get-transaction';
 import { runPayuPaymentFlow, runPayuReserveFlow } from './payu.payment-flow';
@@ -36,16 +37,27 @@ const shouldUseReserveDoTransaction = (request: AuthorizeRequest, method: PayURe
 };
 
 export class PayUProvider extends BaseProvider {
-  private readonly processedIpnHashes = new Set<string>();
+  private readonly config: PayURuntimeConfig;
 
-  constructor() {
-    super(PaymentProviderName.PAYU, env.payu.baseUrl, '', env.payu.webhookSecret);
+  constructor(config: PayURuntimeConfig = {
+    baseUrl: env.payu.baseUrl,
+    webhookSecret: env.payu.webhookSecret,
+    soapUsername: env.payu.soapUsername,
+    soapPassword: env.payu.soapPassword,
+    safekey: env.payu.safekey,
+    rppRedirectBaseUrl: env.payu.rppRedirectBaseUrl,
+    defaultReturnUrl: env.payu.defaultReturnUrl,
+    defaultCancelUrl: env.payu.defaultCancelUrl,
+    defaultNotificationUrl: env.payu.defaultNotificationUrl
+  }) {
+    super(PaymentProviderName.PAYU, config.baseUrl, '', config.webhookSecret);
+    this.config = config;
   }
 
   async payment(request: PaymentRequest): Promise<PaymentResponse> {
     const startedAt = Date.now();
-    const supportedPaymentMethod = (request.paymentMethod ?? DEFAULT_PAYU_METHOD) as PayURedirectPaymentMethod;
-    const flow = await runPayuPaymentFlow(this.baseUrl, request, supportedPaymentMethod);
+    const supportedPaymentMethod = request.paymentMethod ?? DEFAULT_PAYU_METHOD;
+    const flow = await runPayuPaymentFlow(this.config, request, supportedPaymentMethod);
 
     const response = this.normalizeResponse({
       providerReference: flow.providerReference,
@@ -68,17 +80,19 @@ export class PayUProvider extends BaseProvider {
   async authorize(request: AuthorizeRequest): Promise<PaymentResponse> {
     const startedAt = Date.now();
 
-    const supportedPaymentMethod = (request.paymentMethod ?? DEFAULT_PAYU_METHOD) as PayURedirectPaymentMethod;
-    const transactionType: PayUSetTransactionType = (request.transactionType ?? 'RESERVE') as PayUSetTransactionType;
+    const supportedPaymentMethod = request.paymentMethod ?? DEFAULT_PAYU_METHOD;
+    const transactionType: PayUSetTransactionType = request.transactionType ?? 'RESERVE';
 
     if (shouldUseReserveDoTransaction(request, supportedPaymentMethod, transactionType)) {
       const metadata = request.metadata;
       const result = await runReserveDoTransaction({
-        baseUrl: this.baseUrl,
+        config: this.config,
         transactionId: request.paymentId,
         amount: request.amount,
         currency: request.currency,
         merchantReference: request.customerReference ?? request.paymentId,
+        returnUrl: request.redirectContext?.returnUrl,
+        cancelUrl: request.redirectContext?.cancelUrl,
         notificationUrl: request.redirectContext?.notificationUrl,
         customer: {
           merchantUserId: request.customerReference ?? request.paymentId,
@@ -126,7 +140,7 @@ export class PayUProvider extends BaseProvider {
       return response;
     }
 
-    const flow = await runPayuReserveFlow(this.baseUrl, request, supportedPaymentMethod, transactionType);
+    const flow = await runPayuReserveFlow(this.config, request, supportedPaymentMethod, transactionType);
 
     const response = this.normalizeResponse({
       providerReference: flow.providerReference,
@@ -152,7 +166,7 @@ export class PayUProvider extends BaseProvider {
     const startedAt = Date.now();
     const merchantReference = request.merchantReference ?? request.transactionId;
     const result = await runFinalizeDoTransaction({
-      baseUrl: this.baseUrl,
+      config: this.config,
       transactionId: request.transactionId,
       amount: request.amount,
       currency: request.currency,
@@ -174,7 +188,7 @@ export class PayUProvider extends BaseProvider {
   async refund(request: RefundRequest): Promise<PaymentResponse> {
     const startedAt = Date.now();
     const result = await runCreditDoTransaction({
-      baseUrl: this.baseUrl,
+      config: this.config,
       transactionId: request.transactionId,
       amount: request.amount,
       currency: request.currency,
@@ -197,7 +211,7 @@ export class PayUProvider extends BaseProvider {
     const startedAt = Date.now();
     const merchantReference = request.merchantReference ?? request.transactionId;
     const result = await runReserveCancelDoTransaction({
-      baseUrl: this.baseUrl,
+      config: this.config,
       transactionId: request.transactionId,
       amount: request.amount,
       currency: request.currency,
@@ -224,10 +238,10 @@ export class PayUProvider extends BaseProvider {
   }
 
   async handleWebhook(payload: unknown): Promise<WebhookEvent | null> {
-    return parsePayuWebhook(payload, this.processedIpnHashes);
+    return parsePayuWebhook(payload);
   }
 
   async lookupTransaction(request: LookupTransactionRequest): Promise<LookupTransactionResult> {
-    return getTransaction({ baseUrl: this.baseUrl, ...request });
+    return getTransaction({ config: this.config, ...request });
   }
 }

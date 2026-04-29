@@ -1,6 +1,12 @@
 import { PayUProvider } from '../../src/providers/payu/payu.provider';
 import { PAYU_REDIRECT_PAYMENT_METHODS, PaymentStatus } from '../../src/domain/enums';
 
+const merchantRedirectContext = {
+  returnUrl: 'https://merchant.example.com/payu/return',
+  cancelUrl: 'https://merchant.example.com/payu/cancel',
+  notificationUrl: 'https://merchant.example.com/webhooks/payu'
+};
+
 describe('PayUProvider', () => {
   it.each(PAYU_REDIRECT_PAYMENT_METHODS)('returns redirect payment response for %s', async (method) => {
     const provider = new PayUProvider();
@@ -9,7 +15,8 @@ describe('PayUProvider', () => {
       paymentId: 'payment_1',
       amount: 100,
       currency: 'ZAR',
-      paymentMethod: method
+      paymentMethod: method,
+      redirectContext: merchantRedirectContext
     });
 
     expect(result.provider).toBe('PAYU');
@@ -38,6 +45,24 @@ describe('PayUProvider', () => {
     expect(result.status).toBe(PaymentStatus.AUTHORIZED);
     expect(result.providerReference).toBe('payment_s2s_reserve_1');
     expect(result.redirectUrl).toBeUndefined();
+  });
+
+  it('requires merchant redirect urls when secure3d is requested for S2S authorize', async () => {
+    const provider = new PayUProvider();
+
+    await expect(
+      provider.authorize({
+        paymentId: 'payment_s2s_secure3d_1',
+        amount: 100,
+        currency: 'ZAR',
+        paymentMethod: 'CREDITCARD',
+        transactionType: 'RESERVE',
+        metadata: {
+          payuAuthorizeFlow: 'DO_TRANSACTION',
+          secure3d: true
+        }
+      })
+    ).rejects.toThrow('redirectContext.returnUrl');
   });
 
   it('supports CREDIT refund flow', async () => {

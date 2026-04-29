@@ -7,6 +7,7 @@ export const paymentRoutes = (controller: PaymentController): Router => {
 
   router.get('/transactions', asyncHandler(controller.listTransactions));
   router.get('/transactions/:id/logs', asyncHandler(controller.listTransactionLogs));
+  router.get('/transactions/:id/webhooks', asyncHandler(controller.listWebhookEvents));
   router.get('/payments/:id', asyncHandler(controller.getById));
   router.get('/payments/:id/provider-status', asyncHandler(controller.lookupProviderStatus));
   router.post('/payment', asyncHandler(controller.payment));

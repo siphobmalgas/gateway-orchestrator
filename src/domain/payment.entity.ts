@@ -2,6 +2,7 @@ import { PaymentProviderName, PaymentStatus } from './enums';
 
 export interface Payment {
   id: string;
+  merchantIdentifier?: string;
   provider: PaymentProviderName;
   amount: number;
   currency: string;
@@ -9,6 +10,7 @@ export interface Payment {
   providerReference?: string;
   checkoutUrl?: string;
   idempotencyKey: string;
+  initialRequestHash?: string;
   createdAt: Date;
   updatedAt: Date;
 }

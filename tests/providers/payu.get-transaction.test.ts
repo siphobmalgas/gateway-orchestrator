@@ -9,6 +9,18 @@ jest.mock('../../src/infrastructure/http.client', () => ({
 
 const mockedRequestWithRetry = requestWithRetry as jest.MockedFunction<typeof requestWithRetry>;
 
+const payuConfig = {
+  baseUrl: 'https://staging.payu.example/service/PayUAPI',
+  webhookSecret: 'payu-test-secret',
+  soapUsername: '200021',
+  soapPassword: 'WSAUFbw6',
+  safekey: '{07F70723-1B96-4B97-B891-7BF708594EEA}',
+  rppRedirectBaseUrl: 'https://staging.payu.example/rpp.do',
+  defaultReturnUrl: 'https://merchant.example.com/payu/return',
+  defaultCancelUrl: 'https://merchant.example.com/payu/cancel',
+  defaultNotificationUrl: 'https://merchant.example.com/webhooks/payu'
+};
+
 describe('mapTransactionState', () => {
   it('maps successful reserve transactions to AUTHORIZED', () => {
     expect(mapTransactionState('SUCCESSFUL', 'RESERVE')).toBe(PaymentStatus.AUTHORIZED);
@@ -59,7 +71,7 @@ describe('getTransaction', () => {
     `);
 
     const result = await getTransaction({
-      baseUrl: 'https://staging.payu.example/service/PayUAPI',
+      config: payuConfig,
       payuReference: 'payu_ref_123',
       merchantReference: 'payment_123'
     });
@@ -94,7 +106,7 @@ describe('getTransaction', () => {
     `);
 
     const result = await getTransaction({
-      baseUrl: 'https://staging.payu.example/service/PayUAPI',
+      config: payuConfig,
       payuReference: 'payu_ref_123',
       merchantReference: 'payment_123'
     });

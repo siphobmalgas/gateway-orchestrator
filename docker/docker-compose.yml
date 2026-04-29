@@ -1,13 +1,62 @@
-version: '3.9'
 services:
+  mongo:
+    image: mongo:7.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: sbrmd2188_db_user
+      MONGO_INITDB_ROOT_PASSWORD: zgDu6AC7iEyUdmwL
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo_data:/data/db
+      - ../mongodb/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mongosh --quiet --username $$MONGO_INITDB_ROOT_USERNAME --password $$MONGO_INITDB_ROOT_PASSWORD --eval \"db.adminCommand('ping').ok\" admin | grep 1"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: payment_oltp
+      MYSQL_USER: payment_user
+      MYSQL_PASSWORD: payment_pass001
+      MYSQL_ROOT_PASSWORD: rootpasssyfer2026
+    ports:
+      - '3306:3306'
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   app:
-    build: .
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     ports:
       - '3000:3000'
     env_file:
-      - .env
+      - ../.env
+    depends_on:
+      mongo:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/health"]
       interval: 30s
       timeout: 5s
       retries: 3
+
+volumes:
+  mongo_data:
+  mysql_data:

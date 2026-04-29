@@ -1,11 +1,15 @@
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
+import { HttpRequestError } from '../errors/http-request.error';
 import { env } from '../config/env';
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`Request timed out after ${timeoutMs}ms`)), timeoutMs);
+    const timer = setTimeout(
+      () => reject(new HttpRequestError(`Request timed out after ${timeoutMs}ms`, { retryable: true })),
+      timeoutMs
+    );
     promise
       .then((result) => {
         clearTimeout(timer);
@@ -16,6 +20,19 @@ const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number): Promise<T
         reject(error);
       });
   });
+};
+
+const isRetryableAxiosError = (error: unknown): boolean => {
+  if (!axios.isAxiosError(error)) {
+    return error instanceof HttpRequestError ? error.retryable : false;
+  }
+
+  if (!error.response) {
+    return true;
+  }
+
+  const status = error.response.status;
+  return status === 408 || status === 429 || status >= 500;
 };
 
 export const requestWithRetry = async <T>(requestConfig: AxiosRequestConfig, timeoutMs = env.requestTimeoutMs): Promise<T> => {
@@ -29,12 +46,16 @@ export const requestWithRetry = async <T>(requestConfig: AxiosRequestConfig, tim
     } catch (error) {
       lastError = error;
       attempt += 1;
-      if (attempt >= env.maxRetryAttempts) {
+      if (!isRetryableAxiosError(error) || attempt >= env.maxRetryAttempts) {
         break;
       }
       const backoffMs = 100 * 2 ** attempt;
       await sleep(backoffMs);
     }
+  }
+
+  if (lastError instanceof HttpRequestError) {
+    throw lastError;
   }
 
   if (axios.isAxiosError(lastError)) {
@@ -65,12 +86,20 @@ export const requestWithRetry = async <T>(requestConfig: AxiosRequestConfig, tim
       parts.push(`response=${responsePreview}`);
     }
 
-    throw new Error(parts.join(' | '));
+    throw new HttpRequestError(parts.join(' | '), {
+      retryable: isRetryableAxiosError(lastError),
+      statusCode: status,
+      responsePreview: responsePreview || undefined
+    });
   }
 
   if (lastError instanceof Error) {
-    throw new Error(lastError.message);
+    throw new HttpRequestError(lastError.message, {
+      retryable: false
+    });
   }
 
-  throw new Error('Request failed');
+  throw new HttpRequestError('Request failed', {
+    retryable: false
+  });
 };

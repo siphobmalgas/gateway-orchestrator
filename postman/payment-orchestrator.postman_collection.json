@@ -40,6 +40,14 @@
       "value": ""
     },
     {
+      "key": "capturePaymentId",
+      "value": ""
+    },
+    {
+      "key": "voidPaymentId",
+      "value": ""
+    },
+    {
       "key": "providerReference",
       "value": ""
     }
@@ -988,10 +996,65 @@
                   "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
                   "const json = pm.response.json();",
                   "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('capturePaymentId', json.id);",
                   "pm.collectionVariables.set('providerReference', json.providerReference);",
                   "pm.test('has providerReference', function () { pm.expect(json.providerReference).to.be.a('string'); });",
                   "pm.test('status is AUTHORIZED or FAILED', function () { pm.expect(['AUTHORIZED', 'FAILED']).to.include(json.status); });",
                   "pm.test('no redirectUrl on baseline flow', function () { pm.expect(json.redirectUrl).to.be.undefined; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PAYU\",\n  \"amount\": 120,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"CREDITCARD\",\n  \"transactionType\": \"RESERVE\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{returnUrl}}\",\n    \"cancelUrl\": \"{{cancelUrl}}\"\n  },\n  \"metadata\": {\n    \"payuAuthorizeFlow\": \"DO_TRANSACTION\",\n    \"firstName\": \"Sipho\",\n    \"lastName\": \"Mthembu\",\n    \"email\": \"sipho@example.com\",\n    \"mobile\": \"27821234567\",\n    \"cardNumber\": \"4111120000005078\",\n    \"cardExpiry\": \"122030\",\n    \"cvv\": \"123\",\n    \"nameOnCard\": \"Sipho Mthembu\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/authorise",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "authorise"
+              ]
+            }
+          }
+        },
+        {
+          "name": "S2S RESERVE – CREDITCARD (void baseline)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-s2s-cc-void-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('voidPaymentId', json.id);",
+                  "pm.test('has providerReference', function () { pm.expect(json.providerReference).to.be.a('string'); });",
+                  "pm.test('status is AUTHORIZED or FAILED', function () { pm.expect(['AUTHORIZED', 'FAILED']).to.include(json.status); });",
+                  "pm.test('no redirectUrl on void baseline flow', function () { pm.expect(json.redirectUrl).to.be.undefined; });"
                 ]
               }
             }
@@ -1098,7 +1161,7 @@
                 "exec": [
                   "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
                   "const json = pm.response.json();",
-                  "pm.test('id matches', function () { pm.expect(json.id).to.eql(pm.collectionVariables.get('paymentId')); });"
+                  "pm.test('id matches', function () { pm.expect(json.id).to.eql(pm.collectionVariables.get('capturePaymentId')); });"
                 ]
               }
             }
@@ -1107,13 +1170,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/payments/{{paymentId}}",
+              "raw": "{{baseUrl}}/payments/{{capturePaymentId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "payments",
-                "{{paymentId}}"
+                "{{capturePaymentId}}"
               ]
             }
           }
@@ -1148,13 +1211,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/payments/{{paymentId}}/provider-status",
+              "raw": "{{baseUrl}}/payments/{{capturePaymentId}}/provider-status",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "payments",
-                "{{paymentId}}",
+                "{{capturePaymentId}}",
                 "provider-status"
               ]
             }
@@ -1190,13 +1253,13 @@
               "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/payments/{{paymentId}}/capture",
+              "raw": "{{baseUrl}}/payments/{{capturePaymentId}}/capture",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "payments",
-                "{{paymentId}}",
+                "{{capturePaymentId}}",
                 "capture"
               ]
             }
@@ -1232,13 +1295,13 @@
               "raw": "{\n  \"amount\": 120,\n  \"currency\": \"ZAR\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/payments/{{paymentId}}/refund",
+              "raw": "{{baseUrl}}/payments/{{capturePaymentId}}/refund",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "payments",
-                "{{paymentId}}",
+                "{{capturePaymentId}}",
                 "refund"
               ]
             }
@@ -1274,13 +1337,13 @@
               "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/payments/{{paymentId}}/void",
+              "raw": "{{baseUrl}}/payments/{{voidPaymentId}}/void",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "payments",
-                "{{paymentId}}",
+                "{{voidPaymentId}}",
                 "void"
               ]
             }
@@ -1304,13 +1367,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/transactions/{{paymentId}}/logs",
+              "raw": "{{baseUrl}}/transactions/{{capturePaymentId}}/logs",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "transactions",
-                "{{paymentId}}",
+                "{{capturePaymentId}}",
                 "logs"
               ]
             }

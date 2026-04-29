@@ -1,5 +1,6 @@
 import { env } from '../../config/env';
 import { requestWithRetry } from '../../infrastructure/http.client';
+import { PayFlexRuntimeConfig } from '../provider-runtime-config';
 
 type PayFlexTokenResponse = {
   access_token: string;
@@ -7,26 +8,29 @@ type PayFlexTokenResponse = {
   token_type: string;
 };
 
-let tokenCache: { accessToken: string; expiresAt: number } | null = null;
+const tokenCache = new Map<string, { accessToken: string; expiresAt: number }>();
 
 const isPlaceholder = (value: string): boolean => value.startsWith('payflex_') || value.includes('sandbox.payflex.example');
 
-const assertPayFlexAuthConfig = (): void => {
+const getCacheKey = (config: Pick<PayFlexRuntimeConfig, 'authUrl' | 'audience' | 'clientId'>): string =>
+  `${config.authUrl}|${config.audience}|${config.clientId}`;
+
+const assertPayFlexAuthConfig = (config: Pick<PayFlexRuntimeConfig, 'authUrl' | 'audience' | 'clientId' | 'clientSecret'>): void => {
   const missing: string[] = [];
 
-  if (!env.payflex.authUrl || isPlaceholder(env.payflex.authUrl)) {
+  if (!config.authUrl || isPlaceholder(config.authUrl)) {
     missing.push('PAYFLEX_AUTH_URL');
   }
 
-  if (!env.payflex.audience || isPlaceholder(env.payflex.audience)) {
+  if (!config.audience || isPlaceholder(config.audience)) {
     missing.push('PAYFLEX_AUDIENCE');
   }
 
-  if (!env.payflex.clientId || isPlaceholder(env.payflex.clientId)) {
+  if (!config.clientId || isPlaceholder(config.clientId)) {
     missing.push('PAYFLEX_CLIENT_ID');
   }
 
-  if (!env.payflex.clientSecret || isPlaceholder(env.payflex.clientSecret)) {
+  if (!config.clientSecret || isPlaceholder(config.clientSecret)) {
     missing.push('PAYFLEX_CLIENT_SECRET');
   }
 
@@ -38,35 +42,45 @@ const assertPayFlexAuthConfig = (): void => {
 };
 
 export const clearPayFlexTokenCache = (): void => {
-  tokenCache = null;
+  tokenCache.clear();
 };
 
-export const getPayFlexAccessToken = async (): Promise<string> => {
-  assertPayFlexAuthConfig();
+export const getPayFlexAccessToken = async (
+  config: Pick<PayFlexRuntimeConfig, 'authUrl' | 'audience' | 'clientId' | 'clientSecret'> = {
+    authUrl: env.payflex.authUrl,
+    audience: env.payflex.audience,
+    clientId: env.payflex.clientId,
+    clientSecret: env.payflex.clientSecret
+  }
+): Promise<string> => {
+  assertPayFlexAuthConfig(config);
 
-  if (tokenCache && tokenCache.expiresAt > Date.now() + 60_000) {
-    return tokenCache.accessToken;
+  const cacheKey = getCacheKey(config);
+  const cachedToken = tokenCache.get(cacheKey);
+
+  if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) {
+    return cachedToken.accessToken;
   }
 
   const response = await requestWithRetry<PayFlexTokenResponse>({
     method: 'POST',
-    url: env.payflex.authUrl,
+    url: config.authUrl,
     headers: {
       'Content-Type': 'application/json'
     },
     data: {
-      client_id: env.payflex.clientId,
-      client_secret: env.payflex.clientSecret,
-      audience: env.payflex.audience,
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+      audience: config.audience,
       grant_type: 'client_credentials'
     },
     responseType: 'json'
   });
 
-  tokenCache = {
+  tokenCache.set(cacheKey, {
     accessToken: response.access_token,
     expiresAt: Date.now() + response.expires_in * 1000
-  };
+  });
 
   return response.access_token;
 };
