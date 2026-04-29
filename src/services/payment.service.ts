@@ -71,6 +71,13 @@ export class PaymentService {
     return this.executeInitialFlow('authorize', input, headers);
   }
 
+  private async markPaymentFailed(payment: Payment): Promise<void> {
+    ensureTransition(payment.status, PaymentStatus.FAILED);
+    payment.status = PaymentStatus.FAILED;
+    payment.updatedAt = new Date();
+    await this.paymentRepository.update(payment);
+  }
+
   private async executeInitialFlow(
     flow: 'payment' | 'authorize',
     input: CreatePaymentInput,
@@ -206,18 +213,12 @@ export class PaymentService {
           continue;
         }
 
-        ensureTransition(payment.status, PaymentStatus.FAILED);
-        payment.status = PaymentStatus.FAILED;
-        payment.updatedAt = new Date();
-        await this.paymentRepository.update(payment);
+        await this.markPaymentFailed(payment);
         throw error;
       }
     }
 
-    ensureTransition(payment.status, PaymentStatus.FAILED);
-    payment.status = PaymentStatus.FAILED;
-    payment.updatedAt = new Date();
-    await this.paymentRepository.update(payment);
+    await this.markPaymentFailed(payment);
 
     if (lastError instanceof Error) {
       throw lastError;
