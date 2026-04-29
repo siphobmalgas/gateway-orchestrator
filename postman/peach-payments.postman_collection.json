@@ -1,0 +1,1324 @@
+{
+  "info": {
+    "_postman_id": "c7d8e9f0-1a2b-3c4d-5e6f-7a8b9c0d1e2f",
+    "name": "Peach Payments API",
+    "description": "Peach Payments provider — payment (DB), authorize (PA for cards, DB for non-card), capture (CP), refund (RF), void/reversal (RV), transaction status lookup, transaction logs, and webhook simulation. Covers all supported payment brands: VISA, MASTER, AMEX, DINERS, PAYBYBANK, PEACHEFT, NDBEFT, MASTERPASS, PAYSHAP, MOBICRED, RCSSTORECARDS, PAYFLEX, ZEROPAY, FLOAT, HAPPYPAY.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.collectionVariables.get('idempotencyKey')) {",
+          "  pm.collectionVariables.set('idempotencyKey', 'idem-peach-' + Date.now());",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "shopperResultUrl",
+      "value": "https://merchant.example.com/peach/return"
+    },
+    {
+      "key": "notificationUrl",
+      "value": "https://merchant.example.com/webhooks/peach"
+    },
+    {
+      "key": "idempotencyKey",
+      "value": ""
+    },
+    {
+      "key": "paymentId",
+      "value": ""
+    },
+    {
+      "key": "providerReference",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Peach – Payment Flow (POST /payment)",
+      "description": "Debit (DB) payment flow via Hosted Checkout — initiates a redirect-based charge. Covers card brands and alternative payment methods.",
+      "item": [
+        {
+          "name": "PAYMENT – VISA (Card)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-peach-pay-visa-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('has providerReference', function () { pm.expect(json.providerReference).to.be.a('string'); });",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });",
+                  "pm.test('has redirectUrl', function () { pm.expect(json.redirectUrl || json.checkoutUrl).to.be.a('string'); });",
+                  "pm.test('has inlineRedirect', function () { pm.expect(json.inlineRedirect).to.be.an('object'); });",
+                  "pm.test('inlineRedirect is iframe-ready', function () { pm.expect(json.inlineRedirect).to.include({ mode: 'IFRAME', method: 'GET' }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 250,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"VISA\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\",\n    \"notificationUrl\": \"{{notificationUrl}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["payment"]
+            }
+          }
+        },
+        {
+          "name": "PAYMENT – MASTER (Card)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-peach-pay-mc-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });",
+                  "pm.test('has redirectUrl', function () { pm.expect(json.redirectUrl || json.checkoutUrl).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 350,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"MASTER\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\",\n    \"notificationUrl\": \"{{notificationUrl}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["payment"]
+            }
+          }
+        },
+        {
+          "name": "PAYMENT – AMEX (Card)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-peach-pay-amex-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 500,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"AMEX\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\",\n    \"notificationUrl\": \"{{notificationUrl}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["payment"]
+            }
+          }
+        },
+        {
+          "name": "PAYMENT – DINERS (Card)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-peach-pay-diners-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 150,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"DINERS\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\",\n    \"notificationUrl\": \"{{notificationUrl}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["payment"]
+            }
+          }
+        },
+        {
+          "name": "PAYMENT – PAYBYBANK (EFT multi-bank)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-peach-pay-pbb-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });",
+                  "pm.test('has redirectUrl', function () { pm.expect(json.redirectUrl || json.checkoutUrl).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 200,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"PAYBYBANK\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\",\n    \"notificationUrl\": \"{{notificationUrl}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["payment"]
+            }
+          }
+        },
+        {
+          "name": "PAYMENT – PEACHEFT",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-peach-pay-peft-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 175,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"PEACHEFT\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\",\n    \"notificationUrl\": \"{{notificationUrl}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["payment"]
+            }
+          }
+        },
+        {
+          "name": "PAYMENT – NDBEFT (Nedbank Direct EFT)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-peach-pay-ndb-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 120,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"NDBEFT\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\",\n    \"notificationUrl\": \"{{notificationUrl}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["payment"]
+            }
+          }
+        },
+        {
+          "name": "PAYMENT – MASTERPASS (Scan to Pay)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-peach-pay-stp-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 80,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"MASTERPASS\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\",\n    \"notificationUrl\": \"{{notificationUrl}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["payment"]
+            }
+          }
+        },
+        {
+          "name": "PAYMENT – PAYSHAP",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-peach-pay-ps-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 50,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"PAYSHAP\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\",\n    \"notificationUrl\": \"{{notificationUrl}}\"\n  },\n  \"metadata\": {\n    \"virtualAccount.bank\": \"FIRSTNATIONALBANK\",\n    \"virtualAccount.type\": \"CELLPHONE\",\n    \"virtualAccount.accountId\": \"+27-123456789\",\n    \"customParameters[enableTestMode]\": \"true\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["payment"]
+            }
+          }
+        },
+        {
+          "name": "PAYMENT – MOBICRED",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-peach-pay-mobi-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 400,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"MOBICRED\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\",\n    \"notificationUrl\": \"{{notificationUrl}}\"\n  },\n  \"metadata\": {\n    \"virtualAccount.accountId\": \"customer@example.com\",\n    \"virtualAccount.password\": \"mob1cred_pass\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["payment"]
+            }
+          }
+        },
+        {
+          "name": "PAYMENT – RCSSTORECARDS",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-peach-pay-rcs-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 600,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"RCSSTORECARDS\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\",\n    \"notificationUrl\": \"{{notificationUrl}}\"\n  },\n  \"metadata\": {\n    \"card.number\": \"6010240000000000\",\n    \"customParameters[enableTestMode]\": \"true\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["payment"]
+            }
+          }
+        },
+        {
+          "name": "PAYMENT – PAYFLEX (BNPL)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-peach-pay-pflex-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 1000,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"PAYFLEX\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\",\n    \"notificationUrl\": \"{{notificationUrl}}\"\n  },\n  \"metadata\": {\n    \"firstName\": \"Sipho\",\n    \"lastName\": \"Mthembu\",\n    \"email\": \"sipho@example.com\",\n    \"mobile\": \"27821234567\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["payment"]
+            }
+          }
+        },
+        {
+          "name": "PAYMENT – ZEROPAY (3 instalments)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-peach-pay-zp-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 300,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"ZEROPAY\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\",\n    \"notificationUrl\": \"{{notificationUrl}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["payment"]
+            }
+          }
+        },
+        {
+          "name": "PAYMENT – FLOAT (interest-free instalments)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-peach-pay-fl-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 500,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"FLOAT\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\",\n    \"notificationUrl\": \"{{notificationUrl}}\"\n  },\n  \"metadata\": {\n    \"customParameters[enableTestMode]\": \"true\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["payment"]
+            }
+          }
+        },
+        {
+          "name": "PAYMENT – HAPPYPAY (instalments)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-peach-pay-hp-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 750,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"HAPPYPAY\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\",\n    \"notificationUrl\": \"{{notificationUrl}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["payment"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Peach – Authorize Flow (POST /authorise)",
+      "description": "Pre-authorization flow — uses PA for card brands (hold funds without capture) and DB for non-card brands. Card brands require a subsequent capture to finalize.",
+      "item": [
+        {
+          "name": "AUTHORIZE – VISA (PA)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-peach-auth-visa-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('has providerReference', function () { pm.expect(json.providerReference).to.be.a('string'); });",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });",
+                  "pm.test('has redirectUrl', function () { pm.expect(json.redirectUrl || json.checkoutUrl).to.be.a('string'); });",
+                  "pm.test('has inlineRedirect', function () { pm.expect(json.inlineRedirect).to.be.an('object'); });",
+                  "pm.test('inlineRedirect is iframe-ready', function () { pm.expect(json.inlineRedirect).to.include({ mode: 'IFRAME', method: 'GET' }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 500,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"VISA\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\",\n    \"notificationUrl\": \"{{notificationUrl}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/authorise",
+              "host": ["{{baseUrl}}"],
+              "path": ["authorise"]
+            }
+          }
+        },
+        {
+          "name": "AUTHORIZE – MASTER (PA)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-peach-auth-mc-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });",
+                  "pm.test('has redirectUrl', function () { pm.expect(json.redirectUrl || json.checkoutUrl).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 600,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"MASTER\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\",\n    \"notificationUrl\": \"{{notificationUrl}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/authorise",
+              "host": ["{{baseUrl}}"],
+              "path": ["authorise"]
+            }
+          }
+        },
+        {
+          "name": "AUTHORIZE – PAYBYBANK (DB, non-card)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'idem-peach-auth-pbb-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', json.id);",
+                  "pm.collectionVariables.set('providerReference', json.providerReference);",
+                  "pm.test('status is PENDING', function () { pm.expect(json.status).to.eql('PENDING'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 200,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"PAYBYBANK\",\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\",\n    \"notificationUrl\": \"{{notificationUrl}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/authorise",
+              "host": ["{{baseUrl}}"],
+              "path": ["authorise"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Peach – S2S 3DS Card Flow",
+      "description": "Server-to-Server card payment flow with 3D Secure. Requires PCI-DSS compliance. Card details are sent directly in metadata. The response may include a 3DS redirect URL for challenge authentication.",
+      "item": [
+        {
+          "name": "S2S PAYMENT – VISA (DB + 3DS)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}-s2s-visa-db" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 100.00,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"VISA\",\n  \"metadata\": {\n    \"card.number\": \"4111111111111111\",\n    \"card.holder\": \"Jane Jones\",\n    \"card.expiryMonth\": \"05\",\n    \"card.expiryYear\": \"2034\",\n    \"card.cvv\": \"123\",\n    \"customer.browser.acceptHeader\": \"text/html\",\n    \"customer.browser.language\": \"en-US\",\n    \"customer.browser.screenHeight\": \"1080\",\n    \"customer.browser.screenWidth\": \"1920\",\n    \"customer.browser.timezone\": \"-120\",\n    \"customer.browser.userAgent\": \"Mozilla/5.0\",\n    \"customer.browser.javaEnabled\": \"false\",\n    \"customer.browser.javascriptEnabled\": \"true\",\n    \"customer.ip\": \"192.168.1.1\",\n    \"customParameters[3DS2_enrolled]\": \"true\",\n    \"customParameters[3DS2_flow]\": \"challenge\"\n  },\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\",\n    \"notificationUrl\": \"{{notificationUrl}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["payment"]
+            },
+            "description": "S2S card payment with 3DS — sends card data directly. Uses test card 4111111111111111 which triggers 3DS. Response will include PENDING_3DS status with redirectUrl for the 3DS challenge page."
+          }
+        },
+        {
+          "name": "S2S PAYMENT – VISA (DB, no 3DS)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}-s2s-visa-no3ds" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 92.00,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"VISA\",\n  \"metadata\": {\n    \"card.number\": \"4200000000000000\",\n    \"card.holder\": \"Jane Jones\",\n    \"card.expiryMonth\": \"05\",\n    \"card.expiryYear\": \"2034\",\n    \"card.cvv\": \"123\"\n  },\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["payment"]
+            },
+            "description": "S2S card payment without 3DS — uses test card 4200000000000000 (Approved without 3DS). Gets synchronous success response."
+          }
+        },
+        {
+          "name": "S2S AUTHORIZE – VISA (PA + 3DS)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  var body = pm.response.json();",
+                  "  if (body.id) pm.collectionVariables.set('paymentId', body.id);",
+                  "  if (body.providerReference) pm.collectionVariables.set('transactionId', body.providerReference);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}-s2s-visa-pa" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 500.00,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"VISA\",\n  \"metadata\": {\n    \"card.number\": \"4111111111111111\",\n    \"card.holder\": \"Jane Jones\",\n    \"card.expiryMonth\": \"05\",\n    \"card.expiryYear\": \"2034\",\n    \"card.cvv\": \"123\",\n    \"customer.browser.acceptHeader\": \"text/html\",\n    \"customer.browser.language\": \"en-US\",\n    \"customer.browser.screenHeight\": \"1080\",\n    \"customer.browser.screenWidth\": \"1920\",\n    \"customer.browser.timezone\": \"-120\",\n    \"customer.browser.userAgent\": \"Mozilla/5.0\",\n    \"customer.browser.javaEnabled\": \"false\",\n    \"customer.browser.javascriptEnabled\": \"true\",\n    \"customer.ip\": \"192.168.1.1\",\n    \"threeDSecure.challengeIndicator\": \"04\"\n  },\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\",\n    \"notificationUrl\": \"{{notificationUrl}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/authorise",
+              "host": ["{{baseUrl}}"],
+              "path": ["authorise"]
+            },
+            "description": "S2S pre-authorization with 3DS challenge. Uses PA (pre-auth) for card hold. threeDSecure.challengeIndicator=04 forces a mandated challenge. After 3DS completion, use the capture endpoint to finalize."
+          }
+        },
+        {
+          "name": "S2S AUTHORIZE – MASTER (PA + 3DS)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "idempotency-key", "value": "{{idempotencyKey}}-s2s-master-pa" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"PEACH\",\n  \"amount\": 750.00,\n  \"currency\": \"ZAR\",\n  \"paymentMethod\": \"MASTER\",\n  \"metadata\": {\n    \"card.number\": \"5454545454545454\",\n    \"card.holder\": \"John Smith\",\n    \"card.expiryMonth\": \"12\",\n    \"card.expiryYear\": \"2035\",\n    \"card.cvv\": \"456\",\n    \"customer.browser.acceptHeader\": \"text/html\",\n    \"customer.browser.language\": \"en-ZA\",\n    \"customer.browser.screenHeight\": \"900\",\n    \"customer.browser.screenWidth\": \"1440\",\n    \"customer.browser.timezone\": \"-120\",\n    \"customer.browser.userAgent\": \"Mozilla/5.0\",\n    \"customer.browser.javascriptEnabled\": \"true\",\n    \"customer.ip\": \"10.0.0.1\"\n  },\n  \"redirectContext\": {\n    \"returnUrl\": \"{{shopperResultUrl}}\",\n    \"notificationUrl\": \"{{notificationUrl}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/authorise",
+              "host": ["{{baseUrl}}"],
+              "path": ["authorise"]
+            },
+            "description": "S2S pre-authorization with Mastercard. Includes browser data for 3DS v2 risk assessment."
+          }
+        },
+        {
+          "name": "S2S STATUS – Get Payment by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/{{paymentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "{{paymentId}}"]
+            },
+            "description": "After the 3DS challenge completes and the shopper is redirected back, query the payment status to get the final result. The providerReference from the original S2S request is used."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Peach – Operations",
+      "description": "Capture (CP), Refund (RF), Void/Reversal (RV) — requires a valid paymentId from a previous payment or authorize call.",
+      "item": [
+        {
+          "name": "CAPTURE – Card PA",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('status is CAPTURED', function () { pm.expect(json.status).to.eql('CAPTURED'); });",
+                  "pm.test('has providerReference', function () { pm.expect(json.providerReference).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/{{paymentId}}/capture",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "{{paymentId}}", "capture"]
+            }
+          }
+        },
+        {
+          "name": "REFUND – Full",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('status is REFUNDED', function () { pm.expect(json.status).to.eql('REFUNDED'); });",
+                  "pm.test('has providerReference', function () { pm.expect(json.providerReference).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 250,\n  \"currency\": \"ZAR\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/{{paymentId}}/refund",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "{{paymentId}}", "refund"]
+            }
+          }
+        },
+        {
+          "name": "REFUND – Partial",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('status is REFUNDED', function () { pm.expect(json.status).to.eql('REFUNDED'); });",
+                  "pm.test('has providerReference', function () { pm.expect(json.providerReference).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 50,\n  \"currency\": \"ZAR\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/{{paymentId}}/refund",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "{{paymentId}}", "refund"]
+            }
+          }
+        },
+        {
+          "name": "VOID / REVERSAL",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('status is VOIDED', function () { pm.expect(json.status).to.eql('VOIDED'); });",
+                  "pm.test('has providerReference', function () { pm.expect(json.providerReference).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/{{paymentId}}/void",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "{{paymentId}}", "void"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Peach – Status & Logs",
+      "description": "Transaction status lookup, payment retrieval, transaction listing, and payment logs.",
+      "item": [
+        {
+          "name": "GET Payment by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('has id', function () { pm.expect(json.id).to.be.a('string'); });",
+                  "pm.test('provider is PEACH', function () { pm.expect(json.provider).to.eql('PEACH'); });",
+                  "pm.test('has status', function () { pm.expect(json.status).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/{{paymentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "{{paymentId}}"]
+            }
+          }
+        },
+        {
+          "name": "GET Provider Status Lookup",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('has status', function () { pm.expect(json.status).to.be.a('string'); });",
+                  "pm.test('has resultCode', function () { pm.expect(json.resultCode).to.be.a('string'); });",
+                  "pm.test('has merchantReference', function () { pm.expect(json.merchantReference).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/{{paymentId}}/provider-status",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "{{paymentId}}", "provider-status"]
+            }
+          }
+        },
+        {
+          "name": "GET Transaction Logs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('response is array', function () { pm.expect(pm.response.json()).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/{{paymentId}}/logs",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "{{paymentId}}", "logs"]
+            }
+          }
+        },
+        {
+          "name": "GET All Transactions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('response is array', function () { pm.expect(pm.response.json()).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/transactions",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Peach – Webhook Simulation",
+      "description": "Simulate a Peach checkout or payment result webhook callback. Update merchantTransactionId and result.code to test different states.",
+      "item": [
+        {
+          "name": "Webhook – Successful DB",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('accepted', function () { pm.expect(pm.response.json().accepted).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-signature", "value": "" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"merchantTransactionId\": \"REPLACE_WITH_SHORT_ID\",\n  \"id\": \"8ac7a4a28a123456789abcdef\",\n  \"paymentType\": \"DB\",\n  \"paymentBrand\": \"VISA\",\n  \"amount\": \"250.00\",\n  \"currency\": \"ZAR\",\n  \"result\": {\n    \"code\": \"000.100.110\",\n    \"description\": \"Request successfully processed in Merchant in Integrator Test Mode\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/peach",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhooks", "peach"]
+            }
+          }
+        },
+        {
+          "name": "Webhook – Successful PA (Pre-auth)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('accepted', function () { pm.expect(pm.response.json().accepted).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-signature", "value": "" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"merchantTransactionId\": \"REPLACE_WITH_SHORT_ID\",\n  \"id\": \"8ac7a4a28a123456789preauth\",\n  \"paymentType\": \"PA\",\n  \"paymentBrand\": \"VISA\",\n  \"amount\": \"500.00\",\n  \"currency\": \"ZAR\",\n  \"result\": {\n    \"code\": \"000.100.112\",\n    \"description\": \"Request successfully processed in Merchant in Integrator Test Mode\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/peach",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhooks", "peach"]
+            }
+          }
+        },
+        {
+          "name": "Webhook – Failed Transaction",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('accepted', function () { pm.expect(pm.response.json().accepted).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-signature", "value": "" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"merchantTransactionId\": \"REPLACE_WITH_SHORT_ID\",\n  \"id\": \"8ac7a4a28a123456789failed\",\n  \"paymentType\": \"DB\",\n  \"paymentBrand\": \"VISA\",\n  \"amount\": \"250.00\",\n  \"currency\": \"ZAR\",\n  \"result\": {\n    \"code\": \"800.100.100\",\n    \"description\": \"Transaction declined\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/peach",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhooks", "peach"]
+            }
+          }
+        },
+        {
+          "name": "Webhook – Pending Transaction",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('accepted', function () { pm.expect(pm.response.json().accepted).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-signature", "value": "" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"merchantTransactionId\": \"REPLACE_WITH_SHORT_ID\",\n  \"id\": \"8ac7a4a28a123456789pending\",\n  \"paymentType\": \"DB\",\n  \"paymentBrand\": \"PAYBYBANK\",\n  \"amount\": \"200.00\",\n  \"currency\": \"ZAR\",\n  \"result\": {\n    \"code\": \"000.200.000\",\n    \"description\": \"Transaction pending\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/peach",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhooks", "peach"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

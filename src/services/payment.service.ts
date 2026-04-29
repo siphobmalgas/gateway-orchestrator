@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { PayURedirectPaymentMethod, PayUSetTransactionType, PaymentProviderName, PaymentStatus } from '../domain/enums';
+import { PaymentProviderName, PaymentStatus } from '../domain/enums';
 import { ensureTransition, Payment } from '../domain/payment.entity';
 import { LookupTransactionResult, PaymentProvider, PaymentResponse, RedirectContext } from '../domain/provider.interface';
 import { ProviderOperationError } from '../errors/provider-operation.error';
@@ -22,8 +22,8 @@ export interface CreatePaymentInput {
   currency: string;
   idempotencyKey: string;
   customerReference?: string;
-  paymentMethod?: PayURedirectPaymentMethod;
-  transactionType?: PayUSetTransactionType;
+  paymentMethod?: string;
+  transactionType?: string;
   redirectContext?: RedirectContext;
   metadata?: Record<string, unknown>;
 }
@@ -234,12 +234,20 @@ export class PaymentService {
     return payment;
   }
 
-  async getPayment(paymentId: string): Promise<Payment | null> {
-    return this.paymentRepository.findById(paymentId);
+  async getPayment(paymentId: string, headers: Record<string, string | string[] | undefined> = {}): Promise<Payment | null> {
+    const payment = await this.paymentRepository.findById(paymentId);
+    if (!payment) {
+      return null;
+    }
+
+    await this.refreshPaymentFromProvider(payment, headers, 'payment-read');
+    return payment;
   }
 
-  async listTransactions(): Promise<Payment[]> {
-    return this.paymentRepository.listAll();
+  async listTransactions(headers: Record<string, string | string[] | undefined> = {}): Promise<Payment[]> {
+    const payments = await this.paymentRepository.listAll();
+    await Promise.all(payments.map((payment) => this.refreshPaymentFromProvider(payment, headers, 'transactions-read')));
+    return payments;
   }
 
   async listTransactionLogs(paymentId: string): Promise<PaymentLog[]> {
@@ -252,43 +260,10 @@ export class PaymentService {
     headers: Record<string, string | string[] | undefined>
   ): Promise<LookupTransactionResult> {
     const payment = await this.getExistingPayment(paymentId);
-    if (!payment.providerReference) {
-      throw new Error(`No provider reference for payment: ${paymentId}`);
-    }
-
-    const provider = this.providers[payment.provider];
-    if (!provider.lookupTransaction) {
+    const result = await this.refreshPaymentFromProvider(payment, headers, 'provider-status-lookup', true);
+    if (!result) {
       throw new Error(`Provider ${payment.provider} does not support transaction lookup`);
     }
-
-    const startedAt = Date.now();
-    const result = await provider.lookupTransaction({
-      payuReference: payment.providerReference,
-      merchantReference: payment.id
-    });
-
-    if (result.payuReference && payment.providerReference !== result.payuReference) {
-      payment.providerReference = result.payuReference;
-    }
-
-    if (payment.status !== result.status) {
-      ensureTransition(payment.status, result.status);
-      payment.status = result.status;
-    }
-
-    payment.updatedAt = new Date();
-    await this.paymentRepository.update(payment);
-
-    await this.paymentLogRepository.create({
-      id: randomUUID(),
-      paymentId: payment.id,
-      provider: payment.provider,
-      request: { paymentId: payment.id, operation: 'provider-status-lookup', providerReference: payment.providerReference },
-      response: result,
-      headers,
-      responseTimeMs: Date.now() - startedAt,
-      createdAt: new Date()
-    });
 
     return result;
   }
@@ -333,6 +308,71 @@ export class PaymentService {
       throw new Error(`Payment not found: ${paymentId}`);
     }
     return payment;
+  }
+
+  private async refreshPaymentFromProvider(
+    payment: Payment,
+    headers: Record<string, string | string[] | undefined>,
+    operation: 'provider-status-lookup' | 'payment-read' | 'transactions-read',
+    requireLookup = false
+  ): Promise<LookupTransactionResult | null> {
+    if (!payment.providerReference) {
+      if (requireLookup) {
+        throw new Error(`No provider reference for payment: ${payment.id}`);
+      }
+      return null;
+    }
+
+    const provider = this.providers[payment.provider];
+    if (!provider.lookupTransaction) {
+      if (requireLookup) {
+        throw new Error(`Provider ${payment.provider} does not support transaction lookup`);
+      }
+      return null;
+    }
+
+    const startedAt = Date.now();
+    const result = await provider.lookupTransaction({
+      providerReference: payment.providerReference,
+      payuReference: payment.providerReference,
+      merchantReference: payment.id
+    });
+
+    const latestProviderReference = result.providerReference ?? result.payuReference;
+    if (latestProviderReference && payment.providerReference !== latestProviderReference) {
+      payment.providerReference = latestProviderReference;
+    }
+
+    if (payment.status !== result.status) {
+      try {
+        ensureTransition(payment.status, result.status);
+        payment.status = result.status;
+      } catch {
+        logger.warn('Ignoring stale provider lookup state during read refresh', {
+          paymentId: payment.id,
+          provider: payment.provider,
+          currentStatus: payment.status,
+          lookupStatus: result.status,
+          operation
+        });
+      }
+    }
+
+    payment.updatedAt = new Date();
+    await this.paymentRepository.update(payment);
+
+    await this.paymentLogRepository.create({
+      id: randomUUID(),
+      paymentId: payment.id,
+      provider: payment.provider,
+      request: { paymentId: payment.id, operation, providerReference: payment.providerReference },
+      response: result,
+      headers,
+      responseTimeMs: Date.now() - startedAt,
+      createdAt: new Date()
+    });
+
+    return result;
   }
 
   private applyOperationResult(

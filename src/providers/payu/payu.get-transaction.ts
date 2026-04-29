@@ -57,9 +57,11 @@ export const getTransaction = async (input: GetTransactionInput): Promise<Lookup
   const shouldCallSoap = hasSoapCredentials && env.nodeEnv !== 'test';
 
   if (!shouldCallSoap) {
+    const ref = input.payuReference ?? input.providerReference ?? '';
     return {
-      payuReference: input.payuReference,
-      merchantReference: input.merchantReference ?? input.payuReference,
+      providerReference: ref,
+      payuReference: ref,
+      merchantReference: input.merchantReference ?? ref,
       transactionState: 'SUCCESSFUL',
       transactionType: 'RESERVE',
       status: PaymentStatus.AUTHORIZED,
@@ -86,7 +88,7 @@ export const getTransaction = async (input: GetTransactionInput): Promise<Lookup
       <Api>ONE_ZERO</Api>
       <Safekey>${escapeXml(env.payu.safekey)}</Safekey>
       <AdditionalInformation>
-        <payUReference>${escapeXml(input.payuReference)}</payUReference>
+        <payUReference>${escapeXml(input.payuReference ?? input.providerReference ?? '')}</payUReference>
       </AdditionalInformation>
     </ns1:getTransaction>
   </SOAP-ENV:Body>
@@ -106,8 +108,8 @@ export const getTransaction = async (input: GetTransactionInput): Promise<Lookup
   const transactionState = readTag(soapResponse, 'transactionState') ?? 'FAILED';
   const transactionType = readTag(soapResponse, 'transactionType') ?? '';
   const currentPayuReference = readTag(soapResponse, 'currentPayUReference') ?? '';
-  const payuReference = currentPayuReference || readTag(soapResponse, 'payUReference') || input.payuReference;
-  const merchantReference = readTag(soapResponse, 'merchantReference') ?? input.merchantReference ?? input.payuReference;
+  const payuReference = currentPayuReference || readTag(soapResponse, 'payUReference') || input.payuReference || input.providerReference || '';
+  const merchantReference = readTag(soapResponse, 'merchantReference') ?? input.merchantReference ?? input.payuReference ?? input.providerReference ?? '';
   const resultCode = readTag(soapResponse, 'resultCode') ?? '';
   const resultMessage = readTag(soapResponse, 'resultMessage') ?? '';
   const requestTrace = readTag(soapResponse, 'requestTrace') ?? '';

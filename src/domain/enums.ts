@@ -33,3 +33,17 @@ export type PayUSetTransactionType = (typeof PAYU_SET_TRANSACTION_TYPES)[number]
 
 export const PAYU_TRANSACTION_STATES = ['NEW', 'PROCESSING', 'SUCCESSFUL', 'FAILED', 'TIMEOUT', 'EXPIRED', 'AWAITING_PAYMENT', '3DS_PENDING'] as const;
 export type PayUTransactionState = (typeof PAYU_TRANSACTION_STATES)[number];
+
+export const PEACH_PAYMENT_BRANDS = [
+  'VISA', 'MASTER', 'AMEX', 'DINERS',
+  'PAYBYBANK', 'PEACHEFT', 'NDBEFT',
+  'MASTERPASS', 'PAYSHAP',
+  'MOBICRED', 'RCSSTORECARDS',
+  'PAYFLEX', 'ZEROPAY', 'FLOAT', 'HAPPYPAY'
+] as const;
+export type PeachPaymentBrand = (typeof PEACH_PAYMENT_BRANDS)[number];
+
+export const PEACH_CARD_BRANDS: readonly PeachPaymentBrand[] = ['VISA', 'MASTER', 'AMEX', 'DINERS'];
+
+export const PEACH_PAYMENT_TYPES = ['DB', 'PA', 'RF', 'CP', 'RV'] as const;
+export type PeachPaymentType = (typeof PEACH_PAYMENT_TYPES)[number];

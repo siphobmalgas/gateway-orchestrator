@@ -188,3 +188,116 @@ describe('PaymentService provider operation failures', () => {
     });
   });
 });
+
+describe('PaymentService provider refresh on reads', () => {
+  it('refreshes provider state when fetching a payment by id', async () => {
+    const provider: PaymentProvider = {
+      payment: jest.fn(),
+      authorize: jest.fn(),
+      capture: jest.fn(),
+      refund: jest.fn(),
+      void: jest.fn(),
+      lookupTransaction: jest.fn().mockResolvedValue({
+        providerReference: 'payflex_order_1',
+        payuReference: 'payflex_order_1',
+        merchantReference: 'payment_read_1',
+        transactionState: 'Approved',
+        transactionType: 'ORDER',
+        status: PaymentStatus.CAPTURED,
+        amountInCents: 12000,
+        currency: 'ZAR',
+        resultCode: '200',
+        resultMessage: 'Approved'
+      }),
+      verifyWebhookSignature: jest.fn().mockReturnValue(true),
+      handleWebhook: jest.fn().mockResolvedValue(null)
+    };
+
+    const paymentRepository = new InMemoryPaymentRepository();
+    const paymentLogRepository = new InMemoryPaymentLogRepository();
+    const service = new PaymentService(
+      { [PaymentProviderName.PAYFLEX]: provider } as Record<PaymentProviderName, PaymentProvider>,
+      paymentRepository,
+      paymentLogRepository
+    );
+
+    await paymentRepository.create({
+      id: 'payment_read_1',
+      provider: PaymentProviderName.PAYFLEX,
+      amount: 120,
+      currency: 'ZAR',
+      status: PaymentStatus.PENDING,
+      providerReference: 'payflex_order_1',
+      idempotencyKey: 'idem-read-1',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const payment = await service.getPayment('payment_read_1', { 'x-request-id': 'req-1' });
+
+    expect(payment?.status).toBe(PaymentStatus.CAPTURED);
+    expect(provider.lookupTransaction).toHaveBeenCalledWith({
+      providerReference: 'payflex_order_1',
+      payuReference: 'payflex_order_1',
+      merchantReference: 'payment_read_1'
+    });
+
+    const logs = await paymentLogRepository.listByPaymentId('payment_read_1');
+    expect(logs).toHaveLength(1);
+    expect(logs[0].request).toMatchObject({ operation: 'payment-read' });
+  });
+
+  it('refreshes provider state for payments returned by the transaction list', async () => {
+    const provider: PaymentProvider = {
+      payment: jest.fn(),
+      authorize: jest.fn(),
+      capture: jest.fn(),
+      refund: jest.fn(),
+      void: jest.fn(),
+      lookupTransaction: jest.fn().mockResolvedValue({
+        providerReference: 'payflex_order_2',
+        payuReference: 'payflex_order_2',
+        merchantReference: 'payment_read_2',
+        transactionState: 'Approved',
+        transactionType: 'ORDER',
+        status: PaymentStatus.CAPTURED,
+        amountInCents: 19900,
+        currency: 'ZAR',
+        resultCode: '200',
+        resultMessage: 'Approved'
+      }),
+      verifyWebhookSignature: jest.fn().mockReturnValue(true),
+      handleWebhook: jest.fn().mockResolvedValue(null)
+    };
+
+    const paymentRepository = new InMemoryPaymentRepository();
+    const paymentLogRepository = new InMemoryPaymentLogRepository();
+    const service = new PaymentService(
+      { [PaymentProviderName.PAYFLEX]: provider } as Record<PaymentProviderName, PaymentProvider>,
+      paymentRepository,
+      paymentLogRepository
+    );
+
+    await paymentRepository.create({
+      id: 'payment_read_2',
+      provider: PaymentProviderName.PAYFLEX,
+      amount: 199,
+      currency: 'ZAR',
+      status: PaymentStatus.PENDING,
+      providerReference: 'payflex_order_2',
+      idempotencyKey: 'idem-read-2',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const payments = await service.listTransactions({ 'x-request-id': 'req-2' });
+
+    expect(payments).toHaveLength(1);
+    expect(payments[0].status).toBe(PaymentStatus.CAPTURED);
+    expect(provider.lookupTransaction).toHaveBeenCalledTimes(1);
+
+    const logs = await paymentLogRepository.listByPaymentId('payment_read_2');
+    expect(logs).toHaveLength(1);
+    expect(logs[0].request).toMatchObject({ operation: 'transactions-read' });
+  });
+});

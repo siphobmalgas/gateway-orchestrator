@@ -66,8 +66,16 @@ export const env = {
     webhookSecret: requireEnv(process.env.PAYFAST_WEBHOOK_SECRET ?? 'payfast_dev_secret', 'PAYFAST_WEBHOOK_SECRET')
   },
   payflex: {
-    baseUrl: process.env.PAYFLEX_BASE_URL ?? 'https://sandbox.payflex.example',
+    baseUrl: process.env.PAYFLEX_BASE_URL ?? 'https://api.uat.payflex.co.za',
     apiKey: process.env.PAYFLEX_API_KEY ?? '',
+    authUrl: process.env.PAYFLEX_AUTH_URL ?? 'https://auth-uat.payflex.co.za/auth/merchant',
+    audience: process.env.PAYFLEX_AUDIENCE ?? 'https://auth-dev.payflex.co.za',
+    clientId: process.env.PAYFLEX_CLIENT_ID ?? 'payflex_client_id',
+    clientSecret: process.env.PAYFLEX_CLIENT_SECRET ?? 'payflex_client_secret',
+    defaultRedirectConfirmUrl: process.env.PAYFLEX_CONFIRM_URL ?? `${defaultPublicBaseUrl}/payflex/confirm`,
+    defaultRedirectCancelUrl: process.env.PAYFLEX_CANCEL_URL ?? `${defaultPublicBaseUrl}/payflex/cancel`,
+    defaultStatusCallbackUrl: process.env.PAYFLEX_STATUS_CALLBACK_URL ?? `${defaultPublicBaseUrl}/webhooks/payflex`,
+    defaultRefundWebhookUrl: process.env.PAYFLEX_REFUND_WEBHOOK_URL ?? `${defaultPublicBaseUrl}/webhooks/payflex`,
     webhookSecret: requireEnv(process.env.PAYFLEX_WEBHOOK_SECRET ?? 'payflex_dev_secret', 'PAYFLEX_WEBHOOK_SECRET')
   },
   stitch: {
@@ -76,8 +84,18 @@ export const env = {
     webhookSecret: requireEnv(process.env.STITCH_WEBHOOK_SECRET ?? 'stitch_dev_secret', 'STITCH_WEBHOOK_SECRET')
   },
   peach: {
-    baseUrl: process.env.PEACH_BASE_URL ?? 'https://sandbox.peachpayments.com',
-    apiKey: process.env.PEACH_API_KEY ?? '',
+    checkoutBaseUrl: process.env.PEACH_CHECKOUT_BASE_URL ?? 'https://testsecure.peachpayments.com',
+    paymentsApiBaseUrl: process.env.PEACH_PAYMENTS_API_BASE_URL ?? 'https://testapi-v2.peachpayments.com',
+    cardApiBaseUrl: process.env.PEACH_CARD_API_BASE_URL ?? 'https://sandbox-card.peachpayments.com',
+    entityId: process.env.PEACH_ENTITY_ID ?? '',
+    secretToken: process.env.PEACH_SECRET_TOKEN ?? '',
+    paymentsApiUserId: process.env.PEACH_PAYMENTS_API_USER_ID ?? '',
+    paymentsApiPassword: process.env.PEACH_PAYMENTS_API_PASSWORD ?? '',
+    paymentsApiEntityId: process.env.PEACH_PAYMENTS_API_ENTITY_ID ?? '',
+    cardApiBearerToken: process.env.PEACH_CARD_API_BEARER_TOKEN ?? '',
+    cardApiEntityId: process.env.PEACH_CARD_API_ENTITY_ID ?? '',
+    defaultShopperResultUrl: process.env.PEACH_SHOPPER_RESULT_URL ?? `${defaultPublicBaseUrl}/peach/return`,
+    defaultNotificationUrl: process.env.PEACH_NOTIFICATION_URL ?? `${defaultPublicBaseUrl}/webhooks/peach`,
     webhookSecret: requireEnv(process.env.PEACH_WEBHOOK_SECRET ?? 'peach_dev_secret', 'PEACH_WEBHOOK_SECRET')
   }
 };
